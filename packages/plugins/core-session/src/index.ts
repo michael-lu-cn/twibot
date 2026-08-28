@@ -71,12 +71,13 @@ export function apply(ctx: Context, config: Config): void {
       const release = await guard.enter()
       let session: BrowserSession | null = null
       try {
+        // 显式空串/空白 = 不用代理（本地 mock/调试）；未配置则按 env 链回落
         const proxy =
-          config.proxy ??
-          process.env['TWITTER_PROXY'] ??
-          process.env['HTTPS_PROXY'] ??
-          process.env['https_proxy'] ??
-          process.env['ALL_PROXY'] ??
+          (config.proxy ?? '').trim() ||
+          process.env['TWITTER_PROXY'] ||
+          process.env['HTTPS_PROXY'] ||
+          process.env['https_proxy'] ||
+          process.env['ALL_PROXY'] ||
           undefined
         const launchOpts: Parameters<typeof chromium.launch>[0] = { headless: true }
         if (proxy) launchOpts.proxy = { server: proxy }

@@ -1,8 +1,8 @@
-import { Home, KeyRound } from "lucide-react"
+import { Home, Users, KeyRound } from "lucide-react"
 import type { CredentialStatus } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
-export type TabKey = "home" | "auth"
+export type TabKey = "home" | "following" | "auth"
 
 const SOURCE_LABEL: Record<string, string> = {
   env: "环境变量",
@@ -35,6 +35,7 @@ export function Sidebar({
 
       <nav className="flex flex-col gap-1">
         <NavItem active={active === "home"} icon={<Home className="size-6" />} label="主页" onClick={() => onSelect("home")} />
+        <NavItem active={active === "following"} icon={<Users className="size-6" />} label="关注" onClick={() => onSelect("following")} />
         <NavItem active={active === "auth"} icon={<KeyRound className="size-6" />} label="认证设置" onClick={() => onSelect("auth")} />
       </nav>
 

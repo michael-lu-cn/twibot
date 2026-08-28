@@ -40,6 +40,9 @@ importers:
       '@twibot/sync-feed':
         specifier: workspace:^
         version: link:../../packages/plugins/sync-feed
+      '@twibot/sync-following':
+        specifier: workspace:^
+        version: link:../../packages/plugins/sync-following
       js-yaml:
         specifier: ^4.1.0
         version: 4.3.2
@@ -209,6 +212,12 @@ importers:
         version: 7.6.13
 
   packages/plugins/sync-feed:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../cordis
+
+  packages/plugins/sync-following:
     dependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^

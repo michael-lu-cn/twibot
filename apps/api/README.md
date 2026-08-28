@@ -18,6 +18,16 @@ curl http://127.0.0.1:12000/api/inspect   # 树里活着的 entry 列表
 pnpm --filter @twibot/api exec tsx src/bin.ts --dump-config   # 离线合成，与真实启动零偏差
 ```
 
+关注列表（sync-following 插件）：
+
+```bash
+curl http://127.0.0.1:12000/api/following          # 本地读取（未同步 404 NOT_SYNCED / 未识别账号 NO_ME）
+curl -X POST http://127.0.0.1:12000/api/following/sync   # 识别当前登录账号（书签页）并增量同步关注列表
+```
+
+本地 mock 全链路（无需外网）：`node apps/api/scripts/mock-x.mjs` 后带 `--patch scripts/mock-overlay.yml` 启动，
+覆盖 `core-session.proxy: ""`（本地直连）与 `sync-following.baseUrl` 指向 mock。
+
 ## CLI
 
 | flag | 作用 |

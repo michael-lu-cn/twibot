@@ -29,6 +29,13 @@
     limit: 20
     scrolls: 5
 
+- id: sync-following
+  name: '@twibot/sync-following'
+  inject: [session, store, api, credential]
+  config:
+    limit: 200
+    scrolls: 8
+
 - id: api-server
   name: '@twibot/api-server'
   inject: [hello]

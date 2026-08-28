@@ -4,6 +4,12 @@ import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 // ─── position 时间轴（从旧项目 position.ts 平移，纯函数）─────────────────
+//
+// 策略：每个数据流（某人的关注列表 / 某人的推文 / 某推文的评论）维护一条
+// 单调递增的时间轴，position 越大越新。
+// - 首次抓取：最新条目锚定 FIRST_POSITION（100000），越往过去越小（递减）。
+// - 增量抓取：批内已知条目之前（更新）→ 最大 +1 递增；之后（更旧）→ 最小 -1 递减；
+//   夹在中间（中断遗漏补抓）→ 相邻已知位置间挤压，空位不足触发整条流重编号（resolvePositions）。
 
 export const FIRST_POSITION = 100_000
 
@@ -38,7 +44,60 @@ export function planPositions(orderedKeys: string[], known: Map<string, number>)
   for (let i = 0; i < firstKnown; i++) out.set(orderedKeys[i], next++)
   let prev = minPos - 1
   for (let i = lastKnown + 1; i < orderedKeys.length; i++) out.set(orderedKeys[i], prev--)
+  // 中间空隙：相邻已知之间挤压（首段由顶部逻辑处理，跳过）
+  let segStart = -1
+  let prevKnownPos = 0
+  let sawFirstKnown = false
+  for (let i = 0; i < orderedKeys.length; i++) {
+    const isKnown = known.has(orderedKeys[i])
+    if (isKnown) {
+      const knownPos = known.get(orderedKeys[i])!
+      if (sawFirstKnown && segStart !== -1) {
+        let p = prevKnownPos - 1
+        for (let g = segStart; g < i; g++) out.set(orderedKeys[g], p--)
+      }
+      sawFirstKnown = true
+      segStart = -1
+      prevKnownPos = knownPos
+    } else if (segStart === -1) {
+      segStart = i
+    }
+  }
   return out
+}
+
+export interface PositionPlan {
+  /** 新条目 → position（正常路径，插入用） */
+  planned: Map<string, number>
+  /** 非空 = 退化重编号（整条流，含已存条目），需将全部行 UPDATE 为映射值 */
+  renumber: Map<string, number> | null
+}
+
+/** 解析一条流的最终 position 分配（含退化重编号路径）。 */
+export function resolvePositions(orderedKeys: string[], known: Map<string, number>): PositionPlan {
+  const planned = planPositions(orderedKeys, known)
+  if (known.size > 0) {
+    const knownPos = new Set(known.values())
+    // 已存本身有重复位置（历史脏数据）也要重编号修复
+    if (knownPos.size !== known.size) return renumberAll(orderedKeys, known)
+    for (const [, p] of planned) {
+      if (knownPos.has(p)) return renumberAll(orderedKeys, known)
+    }
+  }
+  return { planned, renumber: null }
+}
+
+/** 整条流重编号：批内（最新在前）+ 批外已存（按 position DESC，更旧）统一按 100000 起递减 */
+function renumberAll(orderedKeys: string[], known: Map<string, number>): PositionPlan {
+  const inBatch = new Set(orderedKeys)
+  const tail = [...known.keys()]
+    .filter((k) => !inBatch.has(k))
+    .sort((a, b) => (known.get(b) ?? 0) - (known.get(a) ?? 0))
+  const all = [...orderedKeys, ...tail]
+  const renumber = new Map<string, number>()
+  let pos = FIRST_POSITION
+  for (const k of all) renumber.set(k, pos--)
+  return { planned: new Map(), renumber }
 }
 
 // ─── 数据行类型 ──────────────────────────────────────────────────────────
@@ -93,6 +152,27 @@ export interface StoreService {
   listFeed(limit: number): FeedItemRow[]
   /** feed 最后同步时间。 */
   getFeedSyncedAt(): number | null
+  /** 按 handle 查用户（本地数据，无则 null）。 */
+  getUserByHandle(handle: string): UserRow | null
+  /** 关注关系按 userId 分组 upsert（position 时间轴），返回新增条数。 */
+  upsertFollowingRels(userId: string, orderedFollowsIds: string[]): number
+  /** 某人关注的 userId 列表（position DESC = 最新关注在前）。 */
+  getFollowingIds(userId: string, limit: number): string[]
+  /** 某人关注的完整用户列表（join users 补全资料，保持关注顺序）。 */
+  getFollowingUsers(userId: string, limit: number): FollowingUserRow[]
+  /** 关注关系最后一次同步时间。 */
+  getFollowingSyncedAt(userId: string): number | null
+  /** 键值读写（登录账号 handle 持久化等）。 */
+  kvGet(key: string): string | null
+  kvSet(key: string, value: string): void
+}
+
+export interface FollowingUserRow {
+  id: string
+  handle: string
+  name: string
+  bio: string
+  avatarUrl: string
 }
 
 export const name = 'core-store'
@@ -133,6 +213,18 @@ export function apply(ctx: Context, config: Config): void {
         fetched_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS feed_position_idx ON feed(position DESC);
+      CREATE TABLE IF NOT EXISTS app_kv (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL DEFAULT '',
+        updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS following_rels (
+        user_id TEXT NOT NULL,
+        follows_id TEXT NOT NULL,
+        position INTEGER NOT NULL DEFAULT 0,
+        fetched_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, follows_id)
+      );
     `)
   }
 
@@ -236,6 +328,89 @@ export function apply(ctx: Context, config: Config): void {
     getFeedSyncedAt() {
       const row = sqlite.prepare('SELECT MAX(fetched_at) AS t FROM feed').get() as { t: number | null }
       return row.t ?? null
+    },
+
+    getUserByHandle(handle) {
+      const row = sqlite.prepare('SELECT id, handle, name, bio, avatar_url FROM users WHERE handle = ?').get(handle) as
+        | { id: string; handle: string; name: string; bio: string; avatar_url: string }
+        | undefined
+      if (!row) return null
+      return { id: row.id, handle: row.handle, name: row.name, bio: row.bio, avatarUrl: row.avatar_url }
+    },
+
+    upsertFollowingRels(userId, orderedIds) {
+      if (orderedIds.length === 0) return 0
+      const existing = sqlite.prepare('SELECT follows_id, position FROM following_rels WHERE user_id = ?').all(userId) as Array<{
+        follows_id: string
+        position: number
+      }>
+      const known = new Map(existing.map((r) => [r.follows_id, r.position]))
+      const plan = resolvePositions(orderedIds, known)
+      let added = 0
+      if (plan.renumber) {
+        // 退化路径：整条流重编号（已存 + 新条目统一 UPDATE/INSERT）
+        const update = sqlite.prepare('UPDATE following_rels SET position = ? WHERE user_id = ? AND follows_id = ?')
+        const insert = sqlite.prepare('INSERT OR IGNORE INTO following_rels (user_id, follows_id, position, fetched_at) VALUES (?, ?, ?, ?)')
+        for (const [f, position] of plan.renumber) {
+          const existed = update.run(position, userId, f).changes > 0
+          if (!existed) {
+            insert.run(userId, f, position, Date.now())
+            added++
+          }
+        }
+        return added
+      }
+      const insertOnly = sqlite.prepare('INSERT OR IGNORE INTO following_rels (user_id, follows_id, position, fetched_at) VALUES (?, ?, ?, ?)')
+      for (const f of orderedIds) {
+        if (known.has(f)) continue
+        const position = plan.planned.get(f)
+        if (position === undefined) continue
+        insertOnly.run(userId, f, position, Date.now())
+        added++
+      }
+      return added
+    },
+
+    getFollowingIds(userId, limit) {
+      const rows = sqlite
+        .prepare('SELECT follows_id FROM following_rels WHERE user_id = ? ORDER BY position DESC LIMIT ?')
+        .all(userId, limit) as Array<{ follows_id: string }>
+      return rows.map((r) => r.follows_id)
+    },
+
+    getFollowingUsers(userId, limit) {
+      const ids = this.getFollowingIds(userId, limit)
+      if (ids.length === 0) return []
+      const placeholders = ids.map(() => '?').join(', ')
+      const rows = sqlite
+        .prepare(`SELECT id, handle, name, bio, avatar_url FROM users WHERE id IN (${placeholders})`)
+        .all(...ids) as Array<{ id: string; handle: string; name: string; bio: string; avatar_url: string }>
+      const byId = new Map(rows.map((r) => [r.id, r]))
+      return ids
+        .map((id) => byId.get(id))
+        .filter((r): r is { id: string; handle: string; name: string; bio: string; avatar_url: string } => !!r)
+        .map((r) => ({ id: r.id, handle: r.handle, name: r.name, bio: r.bio, avatarUrl: r.avatar_url }))
+    },
+
+    getFollowingSyncedAt(userId) {
+      const row = sqlite
+        .prepare('SELECT MAX(fetched_at) AS t FROM following_rels WHERE user_id = ?')
+        .get(userId) as { t: number | null }
+      return row.t ?? null
+    },
+
+    kvGet(key) {
+      const row = sqlite.prepare('SELECT value FROM app_kv WHERE key = ?').get(key) as { value: string } | undefined
+      return row?.value ?? null
+    },
+
+    kvSet(key, value) {
+      sqlite
+        .prepare(
+          `INSERT INTO app_kv (key, value, updated_at) VALUES (?, ?, ?)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+        )
+        .run(key, value, Date.now())
     },
   }
 
