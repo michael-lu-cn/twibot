@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "pnpm -r --parallel --if-present run dev",
     "dev:api": "pnpm --filter @twibot/api dev",
+    "dev:web": "pnpm --filter @twibot/web dev",
     "api": "pnpm --filter @twibot/api start",
     "typecheck": "tsc -b"
   },
