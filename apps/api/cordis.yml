@@ -1,0 +1,12 @@
+# twibot 根配置：一行一个插件（用户可编辑，改配置即部署）
+# 语法与 dsh cordis.yml 一致：顶层数组；group 嵌套；行支持 id/name/config/inject/disabled
+
+- id: core-hello
+  name: '@twibot/core-hello'
+
+- id: api-server
+  name: '@twibot/api-server'
+  inject: [hello]
+  config:
+    port: 12000
+    host: 127.0.0.1

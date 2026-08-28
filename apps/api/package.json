@@ -1,0 +1,25 @@
+{
+  "name": "@twibot/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/bin.ts",
+    "start": "tsx src/bin.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/cordis-plugin-group": "workspace:^",
+    "@deepseek-ai/cordis-plugin-include": "workspace:^",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
+    "@twibot/api-server": "workspace:^",
+    "@twibot/core-hello": "workspace:^",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@twibot/api-server",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@hono/node-server": "^1.13.0",
+    "hono": "^4.6.0"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "twibot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:api": "tsx watch apps/api/src/bin.ts",
+    "api": "tsx apps/api/src/bin.ts",
+    "typecheck": "tsc -b"
+  },
+  "engines": {
+    "node": ">=22.19"
+  }
+}
