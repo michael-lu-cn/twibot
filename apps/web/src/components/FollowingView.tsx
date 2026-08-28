@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
-import { RefreshCw, UserRound } from "lucide-react"
-import { api, isOk, ERROR_HINTS, type ApiResult, type FollowingUser } from "@/lib/api"
+import { RefreshCw, UserRound, ListTree } from "lucide-react"
+import { api, isOk, ERROR_HINTS, type ApiResult, type BatchTask, type FollowingUser } from "@/lib/api"
 import { imgProxy } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -11,6 +11,7 @@ export function FollowingView({ onOpenUser }: { onOpenUser: (handle: string) => 
   const [handle, setHandle] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [batch, setBatch] = useState<BatchTask | null>(null)
   const [msg, setMsg] = useState<{ kind: "error" | "info"; text: string } | null>(null)
 
   const showErr = (r: ApiResult<unknown>) => {
@@ -49,10 +50,37 @@ export function FollowingView({ onOpenUser }: { onOpenUser: (handle: string) => 
     setSyncing(false)
   }
 
+  /** 批量：每个关注用户抓最新 10 条推文（后台异步任务）。 */
+  const batchRunning = batch?.status === "running"
+
+  async function startBatch() {
+    if (batchRunning) return
+    setMsg({ kind: "info", text: "正在启动批量同步（每个关注用户 10 条推文）…" })
+    const r = await api.startBatchUserTweets(10)
+    if (!isOk(r)) {
+      showErr(r)
+      return
+    }
+    const t = await api.batchTask(r.data.taskId)
+    if (isOk(t)) setBatch(t.data)
+    else setBatch({ id: r.data.taskId, status: "running", total: 0, done: 0, added: 0, createdAt: Date.now() })
+  }
+
+  // 批量任务运行期间轮询进度
+  useEffect(() => {
+    if (!batch?.id || !batchRunning) return
+    const timer = setInterval(async () => {
+      const r = await api.batchTask(batch.id)
+      if (isOk(r)) setBatch(r.data)
+    }, 4000)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batch?.id, batchRunning])
+
   return (
     <div className="min-w-0 flex-1 border-x border-border">
       {/* 顶栏 */}
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur">
         <div>
           <h1 className="text-xl font-bold">关注</h1>
           {handle ? (
@@ -61,11 +89,42 @@ export function FollowingView({ onOpenUser }: { onOpenUser: (handle: string) => 
             <p className="text-[13px] text-muted-foreground">我关注的账号</p>
           )}
         </div>
-        <Button size="sm" onClick={sync} disabled={syncing} className="rounded-full">
-          <RefreshCw className={syncing ? "animate-spin" : ""} />
-          {syncing ? "同步中" : "同步"}
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button size="sm" onClick={sync} disabled={syncing} className="rounded-full">
+            <RefreshCw className={syncing ? "animate-spin" : ""} />
+            {syncing ? "同步中" : "同步"}
+          </Button>
+          <Button size="sm" variant="secondary" onClick={startBatch} disabled={batchRunning} className="rounded-full">
+            <ListTree className={batchRunning ? "animate-pulse" : ""} />
+            {batchRunning ? "批量中…" : "批量同步推文"}
+          </Button>
+        </div>
       </header>
+
+      {/* 批量任务进度 */}
+      {batch ? (
+        <div
+          className={`px-4 py-2 text-[13px] ${
+            batch.status === "failed" ? "bg-destructive/10 text-destructive" : "bg-accent/30 text-muted-foreground"
+          }`}
+        >
+          {batchRunning ? (
+            <>
+              批量同步中：@{batch.current ?? "…"} · {batch.done}/{batch.total} · 已新增 {batch.added} 条
+              <span className="ml-2 inline-block h-1.5 w-24 overflow-hidden rounded-full bg-muted align-middle">
+                <span
+                  className="block h-full rounded-full bg-sky-500 transition-all"
+                  style={{ width: batch.total ? `${Math.round((batch.done / batch.total) * 100)}%` : "4%" }}
+                />
+              </span>
+            </>
+          ) : batch.status === "done" ? (
+            <>批量同步完成：{batch.done} 位用户，新增 {batch.added} 条推文</>
+          ) : (
+            <>批量同步失败：{batch.error ?? batch.status}</>
+          )}
+        </div>
+      ) : null}
 
       {msg ? (
         <div

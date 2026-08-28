@@ -1,5 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Page } from 'playwright'
+import { randomUUID } from 'node:crypto'
 
 // ─── 统一业务错误（轻量版，M1 起共享到 packages/core）────────────────────
 
@@ -16,6 +17,7 @@ export class ApiError extends Error {
 
 export const ErrorCodes = {
   NO_COOKIES: 'NO_COOKIES',
+  NO_ME: 'NO_ME',
   AUTH_FAILED: 'AUTH_FAILED',
   RATE_LIMITED: 'RATE_LIMITED',
   SCRAPE_FAILED: 'SCRAPE_FAILED',
@@ -384,6 +386,88 @@ export function apply(ctx: Context, config: Config): void {
       const { status, body } = errorResponse(e)
       return c.json(body, status as 400 | 401 | 429 | 500 | 502 | 504)
     }
+  })
+
+  // ─── 批量：全部关注的用户推文（异步任务，不受 HTTP 超时限制）────────────
+
+  interface BatchTask {
+    id: string
+    status: 'running' | 'done' | 'failed' | 'canceled'
+    total: number
+    done: number
+    added: number
+    current?: string
+    error?: string
+    createdAt: number
+    finishedAt?: number
+  }
+  const batchTasks = new Map<string, BatchTask>()
+  const KV_CURRENT_HANDLE = 'current_handle' // 与 sync-following 共用
+
+  /** 单用户失败连续超过该值（多为登录墙/限流）则中止任务，避免空转。 */
+  const MAX_CONSECUTIVE_FAILURES = 5
+
+  async function runBatchTask(task: BatchTask, perUser: number, maxUsers: number): Promise<void> {
+    try {
+      const handle = store.kvGet(KV_CURRENT_HANDLE)
+      if (!handle) throw new ApiError(ErrorCodes.NO_ME, '尚未识别当前登录账号，请先同步一次关注列表', 404)
+      const me = store.getUserByHandle(handle)
+      if (!me) throw new ApiError(ErrorCodes.NOT_SYNCED, '本地还没有关注列表，请先同步', 404)
+      const users = store.getFollowingUsers(me.id, maxUsers)
+      task.total = users.length
+      let consecutiveFailures = 0
+      for (const u of users) {
+        if (task.status === 'canceled') break
+        task.current = u.handle
+        try {
+          const tweets = await fetchUserTweets(u.handle, perUser)
+          const added = persistTweets(tweets)
+          task.added += added
+          consecutiveFailures = 0
+        } catch (e) {
+          consecutiveFailures++
+          const message = e instanceof Error ? e.message : String(e)
+          console.warn(`[batch] @${u.handle} 失败(${consecutiveFailures}): ${message}`)
+          if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            task.status = 'failed'
+            task.error = `连续失败 ${consecutiveFailures} 个用户后中止（最近: @${u.handle} ${message}）`
+            task.finishedAt = Date.now()
+            return
+          }
+        }
+        task.done++
+      }
+      if (task.status !== 'canceled') task.status = 'done'
+      task.finishedAt = Date.now()
+    } catch (e) {
+      task.status = 'failed'
+      task.error = e instanceof Error ? e.message : String(e)
+      task.finishedAt = Date.now()
+    }
+  }
+
+  api.post('/api/batch/user-tweets/sync', (c: any) => {
+    const running = [...batchTasks.values()].find((t) => t.status === 'running')
+    if (running) {
+      return c.json(
+        { ok: false, error: { code: 'BUSY', message: `已有批量任务运行中（${running.done}/${running.total} @${running.current ?? ''}）` } },
+        409,
+      )
+    }
+    const perUser = Math.min(Math.max(Number(c.req.query('perUser') ?? 20) || 20, 1), 50)
+    // users<=0 表示全部关注（上限 5000）
+    const maxUsersRaw = Number(c.req.query('users') ?? 0) || 0
+    const maxUsers = maxUsersRaw <= 0 ? 5000 : Math.min(maxUsersRaw, 5000)
+    const task: BatchTask = { id: randomUUID(), status: 'running', total: 0, done: 0, added: 0, createdAt: Date.now() }
+    batchTasks.set(task.id, task)
+    void runBatchTask(task, perUser, maxUsers)
+    return c.json({ ok: true, data: { taskId: task.id, total: task.total }, source: 'batch', elapsedMs: 0 })
+  })
+
+  api.get('/api/batch/user-tweets/task/:id', (c: any) => {
+    const task = batchTasks.get(c.req.param('id'))
+    if (!task) return c.json({ ok: false, error: { code: 'NOT_FOUND', message: '任务不存在或已过期' } }, 404)
+    return c.json({ ok: true, data: task, source: 'batch', elapsedMs: 0 })
   })
 }
 

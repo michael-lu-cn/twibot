@@ -107,6 +107,11 @@ export const api = {
     request<{ added: number; tweets: Tweet[]; syncedAt: number }>(`/api/users/${handle}/tweets/sync?limit=${limit}`, {
       method: "POST",
     }),
+
+  startBatchUserTweets: (perUser = 20) =>
+    request<{ taskId: string }>(`/api/batch/user-tweets/sync?perUser=${perUser}`, { method: "POST" }),
+
+  batchTask: (taskId: string) => request<BatchTask>(`/api/batch/user-tweets/task/${taskId}`),
 }
 
 export interface UserProfile {
@@ -115,4 +120,16 @@ export interface UserProfile {
   name: string
   bio: string
   avatarUrl: string
+}
+
+export interface BatchTask {
+  id: string
+  status: "running" | "done" | "failed" | "canceled"
+  total: number
+  done: number
+  added: number
+  current?: string
+  error?: string
+  createdAt: number
+  finishedAt?: number
 }

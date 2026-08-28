@@ -171,7 +171,11 @@ export function apply(ctx: Context, config: Config): void {
    * 抓取当前用户关注列表（页面拦截 Following GraphQL + 滚动翻页 + DOM fallback）。
    * 返回 { users, targetUserId }（targetUserId 从 Following 响应提取，供落库）。
    */
-  async function fetchFollowing(handle: string, limit: number): Promise<{ users: FollowingUser[]; targetUserId: string | null }> {
+  async function fetchFollowing(
+    handle: string,
+    limit: number,
+    scrolls?: number,
+  ): Promise<{ users: FollowingUser[]; targetUserId: string | null }> {
     const s = await session.launch()
     const { page } = s
     const users: FollowingUser[] = []
@@ -228,7 +232,7 @@ export function apply(ctx: Context, config: Config): void {
 
       // 滚动加载更多（响应拦截持续累积）
       let stallCount = 0
-      for (let i = 0; i < (config.scrolls ?? MAX_SCROLLS) && users.length < limit; i++) {
+      for (let i = 0; i < (scrolls ?? config.scrolls ?? MAX_SCROLLS) && users.length < limit; i++) {
         if (users.length >= limit) break
         const before = users.length
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
@@ -315,13 +319,15 @@ export function apply(ctx: Context, config: Config): void {
   api.post('/api/following/sync', async (c: any) => {
     const t0 = Date.now()
     const limit = Math.min(Math.max(Number(c.req.query('limit') ?? config.limit) || config.limit, 1), 1000)
+    // 全量抓取时可加大滚动轮数（默认用 config.scrolls）
+    const scrolls = Math.min(Math.max(Number(c.req.query('scrolls') ?? 0) || 0, 0), 60) || undefined
     try {
       const creds = (ctx as any).credential as { hasRequired?: () => boolean } | undefined
       if (creds?.hasRequired && !creds.hasRequired()) {
         throw new ApiError(ErrorCodes.NO_COOKIES, '需要 X 登录态：请先在认证设置粘贴你的 cookie', 401)
       }
       const handle = await resolveCurrentHandle()
-      const { users, targetUserId } = await fetchFollowing(handle, limit)
+      const { users, targetUserId } = await fetchFollowing(handle, limit, scrolls)
       const added = finishSync(handle, targetUserId, users)
       return c.json({
         ok: true,
