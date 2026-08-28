@@ -1,0 +1,13 @@
+import { chromium } from 'playwright'
+const browser = await chromium.launch()
+const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+page.on('console', (m) => { if (m.type() === 'error') console.log('[console.error]', m.text().slice(0, 200)) })
+page.on('pageerror', (e) => console.log('[pageerror]', String(e).slice(0, 300)))
+await page.goto('http://127.0.0.1:12001', { waitUntil: 'networkidle' })
+await page.waitForTimeout(2500)
+await page.screenshot({ path: '/tmp/web-home.png' })
+await page.getByText('认证设置').click().catch(() => {})
+await page.waitForTimeout(1200)
+await page.screenshot({ path: '/tmp/web-auth.png' })
+console.log('shot done')
+await browser.close()
