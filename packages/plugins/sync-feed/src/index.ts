@@ -41,6 +41,7 @@ export interface Tweet {
   authorName: string
   authorHandle: string
   authorId?: string
+  avatarUrl?: string
   metrics?: { replies: number; reposts: number; likes: number; views: number | null } | null
 }
 
@@ -91,7 +92,12 @@ export function extractTweet(entry: GraphqlTweetEntry): Tweet | null {
 
   const userResult = (inner.core as { user_results?: { result?: Record<string, any> } } | undefined)?.user_results?.result
   const userCore = userResult?.core as { name?: string; screen_name?: string } | undefined
-  const userLegacy = userResult?.legacy as { name?: string; screen_name?: string } | undefined
+  const userLegacy = userResult?.legacy as { name?: string; screen_name?: string; profile_image_url_https?: string } | undefined
+  const avatarUrl =
+    ((userResult?.avatar as { image_url?: string } | undefined)?.image_url ?? userLegacy?.profile_image_url_https ?? '').replace(
+      /_normal\.(jpg|jpeg|png|webp)$/,
+      '_400x400.$1',
+    )
 
   return {
     id,
@@ -101,6 +107,7 @@ export function extractTweet(entry: GraphqlTweetEntry): Tweet | null {
     authorName: userCore?.name ?? userLegacy?.name ?? '',
     authorHandle: userCore?.screen_name ?? userLegacy?.screen_name ?? '',
     authorId: String(userResult?.rest_id ?? ''),
+    avatarUrl,
     metrics: {
       replies: legacy.reply_count ?? 0,
       reposts: legacy.retweet_count ?? 0,
@@ -241,7 +248,7 @@ export function apply(ctx: Context, config: Config): void {
       const feedIds: string[] = []
       for (const t of tweets) {
         if (t.authorId && t.authorHandle) {
-          store.upsertUser({ id: t.authorId, handle: t.authorHandle, name: t.authorName })
+          store.upsertUser({ id: t.authorId, handle: t.authorHandle, name: t.authorName, ...(t.avatarUrl ? { avatarUrl: t.avatarUrl } : {}) })
         }
         store.upsertTweet({
           id: t.id,
@@ -293,6 +300,7 @@ function apiTweet(t: Tweet) {
     text: t.text,
     authorName: t.authorName,
     authorHandle: t.authorHandle,
+    avatarUrl: t.avatarUrl,
     metrics: t.metrics,
   }
 }

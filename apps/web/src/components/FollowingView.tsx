@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { RefreshCw, UserRound } from "lucide-react"
 import { api, isOk, ERROR_HINTS, type ApiResult, type FollowingUser } from "@/lib/api"
+import { imgProxy } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
@@ -105,7 +106,7 @@ export function FollowingView() {
             {users.map((u) => (
               <div key={u.userId ?? u.handle} className="flex gap-3 border-b border-border px-4 py-3 hover:bg-accent/40">
                 <Avatar className="size-10 shrink-0">
-                  <AvatarImage src={u.avatarUrl || undefined} alt={u.handle} />
+                  <AvatarImage src={imgProxy(u.avatarUrl)} alt={u.handle} />
                   <AvatarFallback>{(u.name || u.handle).slice(0, 1).toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">

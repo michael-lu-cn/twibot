@@ -1,6 +1,6 @@
 import { Eye, Heart, MessageCircle, Repeat2 } from "lucide-react"
 import type { Tweet } from "@/lib/api"
-import { fmtAgo, fmtCount, initial } from "@/lib/format"
+import { fmtAgo, fmtCount, imgProxy, initial } from "@/lib/format"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
@@ -10,7 +10,7 @@ export function TweetCard({ tweet }: { tweet: Tweet }) {
   return (
     <article className="flex gap-3 border-b border-border px-4 py-3 transition-colors hover:bg-accent/40">
       <Avatar size="lg" className="mt-0.5 shrink-0">
-        {tweet.avatarUrl ? <AvatarImage src={tweet.avatarUrl} alt={tweet.authorHandle} /> : null}
+        {tweet.avatarUrl ? <AvatarImage src={imgProxy(tweet.avatarUrl)} alt={tweet.authorHandle} /> : null}
         <AvatarFallback>{initial(tweet.authorName, tweet.authorHandle)}</AvatarFallback>
       </Avatar>
 
