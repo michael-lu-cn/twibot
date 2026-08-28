@@ -182,6 +182,8 @@ export interface StoreService {
   getFollowingSyncedAt(userId: string): number | null
   /** 某人的推文列表（created_at DESC，JOIN 补全作者）。 */
   listUserTweets(userId: string, limit: number): FeedItemRow[]
+  /** 已有推文的 userId 集合（批量续跑跳过已抓用）。 */
+  getUserIdsWithTweets(): string[]
   /** 键值读写（登录账号 handle 持久化等）。 */
   kvGet(key: string): string | null
   kvSet(key: string, value: string): void
@@ -480,6 +482,11 @@ export function apply(ctx: Context, config: Config): void {
     kvGet(key) {
       const row = sqlite.prepare('SELECT value FROM app_kv WHERE key = ?').get(key) as { value: string } | undefined
       return row?.value ?? null
+    },
+
+    getUserIdsWithTweets() {
+      const rows = sqlite.prepare("SELECT DISTINCT user_id FROM tweets WHERE user_id <> ''").all() as Array<{ user_id: string }>
+      return rows.map((r) => r.user_id)
     },
 
     kvSet(key, value) {

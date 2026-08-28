@@ -419,16 +419,26 @@ export function apply(ctx: Context, config: Config): void {
       const me = store.getUserByHandle(handle)
       if (!me) throw new ApiError(ErrorCodes.NOT_SYNCED, '本地还没有关注列表，请先同步', 404)
       const users = store.getFollowingUsers(me.id, maxUsers)
-      task.total = users.length
+      // 续跑：跳过已抓成功的用户（有推文即视为完成），断点续传省时
+      const doneIds = new Set(store.getUserIdsWithTweets() as string[])
+      const pending = users.filter((u: any) => !doneIds.has(u.id))
+      task.total = pending.length
       let next = 0
-      // 共享连续失败计数（并发 worker 共用；成功清零，阈值触发中止）
+      // 共享失败计数（并发 worker 共用；成功清零，阈值触发冷却/中止）
       let failureStreak = 0
+      let coolUntil = 0
 
       const worker = async (): Promise<void> => {
         while (task.status === 'running') {
+          // 限流冷却（全局：任一 worker 触发，大家一起休息）
+          const waitCool = coolUntil - Date.now()
+          if (waitCool > 0) {
+            console.warn(`[batch] 限流冷却 ${Math.ceil(waitCool / 1000)}s …`)
+            await new Promise((r) => setTimeout(r, waitCool))
+          }
           const i = next++
-          if (i >= users.length) return
-          const u = users[i]
+          if (i >= pending.length) return
+          const u = pending[i]
           task.current = u.handle
           try {
             const tweets = await fetchUserTweets(u.handle, perUser)
@@ -444,6 +454,9 @@ export function apply(ctx: Context, config: Config): void {
               task.error = `连续失败 ${failureStreak} 个用户后中止（最近: @${u.handle} ${message}）`
               task.finishedAt = Date.now()
               return
+            }
+            if (failureStreak >= 3) {
+              coolUntil = Date.now() + 60_000
             }
           }
           task.done++
