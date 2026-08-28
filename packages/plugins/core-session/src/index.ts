@@ -41,6 +41,8 @@ export const inject = ['credential', 'api']
 export interface Config {
   /** 页面 UA。 */
   userAgent: string
+  /** 显式代理（http://host:port）；缺省读 TWITTER_PROXY → HTTPS_PROXY/https_proxy → ALL_PROXY。 */
+  proxy?: string
 }
 
 export const X_UA =
@@ -69,7 +71,16 @@ export function apply(ctx: Context, config: Config): void {
       const release = await guard.enter()
       let session: BrowserSession | null = null
       try {
-        const browser: Browser = await chromium.launch({ headless: true })
+        const proxy =
+          config.proxy ??
+          process.env['TWITTER_PROXY'] ??
+          process.env['HTTPS_PROXY'] ??
+          process.env['https_proxy'] ??
+          process.env['ALL_PROXY'] ??
+          undefined
+        const launchOpts: Parameters<typeof chromium.launch>[0] = { headless: true }
+        if (proxy) launchOpts.proxy = { server: proxy }
+        const browser: Browser = await chromium.launch(launchOpts)
         const context = await browser.newContext({
           userAgent: config.userAgent || X_UA,
           viewport: { width: 1280, height: 900 },
