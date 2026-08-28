@@ -1,0 +1,5 @@
+- id: sync-feed
+  config:
+    limit: 10
+    scrolls: 1
+    homeUrl: http://127.0.0.1:18999/home

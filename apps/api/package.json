@@ -14,7 +14,11 @@
     "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@twibot/api-server": "workspace:^",
     "@twibot/core-hello": "workspace:^",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "@twibot/core-credential": "workspace:^",
+    "@twibot/core-store": "workspace:^",
+    "@twibot/core-session": "workspace:^",
+    "@twibot/sync-feed": "workspace:^"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

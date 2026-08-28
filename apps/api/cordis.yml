@@ -4,6 +4,30 @@
 - id: core-hello
   name: '@twibot/core-hello'
 
+- id: core-credential
+  name: '@twibot/core-credential'
+  inject: [api]
+  config:
+    file: data/credential.cookie
+
+- id: core-store
+  name: '@twibot/core-store'
+  config:
+    file: data/twibot.db
+
+- id: core-session
+  name: '@twibot/core-session'
+  inject: [credential, api]
+  config:
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+
+- id: sync-feed
+  name: '@twibot/sync-feed'
+  inject: [session, store, api]
+  config:
+    limit: 20
+    scrolls: 5
+
 - id: api-server
   name: '@twibot/api-server'
   inject: [hello]

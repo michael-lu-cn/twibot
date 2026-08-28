@@ -3,4 +3,5 @@ packages:
   - "packages/plugins/*"
   - "apps/*"
 allowBuilds:
+  better-sqlite3: true
   esbuild: true
