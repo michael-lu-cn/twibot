@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev:api": "tsx watch apps/api/src/bin.ts",
-    "api": "tsx apps/api/src/bin.ts",
+    "dev:api": "pnpm --filter @twibot/api dev",
+    "api": "pnpm --filter @twibot/api start",
     "typecheck": "tsc -b"
   },
   "engines": {
