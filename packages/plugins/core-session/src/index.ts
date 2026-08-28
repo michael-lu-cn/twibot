@@ -1,21 +1,42 @@
 import { Context } from '@deepseek-ai/cordis'
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright'
 
-/** 页面会话互斥锁 + 12s 间隔令牌桶（宁慢勿罚，账挂账号不值得）。 */
+/**
+ * 页面会话闸门：最多 maxConcurrent 个会话并发，每个会话独立最短间隔。
+ * 语义：N 路并行时总吞吐 ≈ N × (1000/intervalMs) 页面/秒，各自间隔仍受控
+ * （宁慢勿罚，但并发对 X 而言等同多标签浏览，属正常行为）。
+ */
 class PageGuard {
-  private lastAt = 0
-  private lock: Promise<void> = Promise.resolve()
+  /** 各并发槽位最近一次启动时间（0 = 从未）。 */
+  private slots: number[]
 
-  /** 串行 + 最短间隔。 */
+  constructor(
+    private minIntervalMs = 4_000,
+    maxConcurrent = 1,
+  ) {
+    this.slots = new Array(maxConcurrent).fill(0)
+  }
+
+  /** 占用一个空闲槽位（串行语义时 maxConcurrent=1 退化为原行为）。 */
   async enter(): Promise<() => void> {
-    const prev = this.lock
-    let release!: () => void
-    this.lock = new Promise<void>((r) => (release = r))
-    await prev
-    const wait = this.lastAt + 12_000 - Date.now()
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait))
-    this.lastAt = Date.now()
-    return release
+    while (true) {
+      // 选最久未用的槽位
+      let min = Infinity
+      let idx = 0
+      for (let i = 0; i < this.slots.length; i++) {
+        if (this.slots[i] < min) {
+          min = this.slots[i]
+          idx = i
+        }
+      }
+      const wait = this.slots[idx] + this.minIntervalMs - Date.now()
+      if (wait > 0) {
+        await new Promise((r) => setTimeout(r, wait))
+        continue
+      }
+      this.slots[idx] = Date.now()
+      return () => {}
+    }
   }
 }
 
@@ -43,6 +64,10 @@ export interface Config {
   userAgent: string
   /** 显式代理（http://host:port）；缺省读 TWITTER_PROXY → HTTPS_PROXY/https_proxy → ALL_PROXY。 */
   proxy?: string
+  /** 页面会话最短间隔 ms（默认 4000；批量抓取可调小提速，调大更保守）。 */
+  minIntervalMs?: number
+  /** 最大并发页面会话数（默认 1；批量抓取并行 = 多标签浏览，建议 ≤4）。 */
+  maxConcurrent?: number
 }
 
 export const X_UA =
@@ -57,7 +82,7 @@ export function detectLoginWall(page: Page, bodyText: string): boolean {
 }
 
 export function apply(ctx: Context, config: Config): void {
-  const guard = new PageGuard()
+  const guard = new PageGuard(config.minIntervalMs ?? 4_000, config.maxConcurrent ?? 1)
   let launches = 0
   let lastAt: number | null = null
   const openSessions = new Set<BrowserSession>()

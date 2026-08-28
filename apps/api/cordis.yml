@@ -21,6 +21,8 @@
   config:
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
     proxy: http://172.16.74.1:7890
+    minIntervalMs: 4000
+    maxConcurrent: 4
 
 - id: sync-feed
   name: '@twibot/sync-feed'

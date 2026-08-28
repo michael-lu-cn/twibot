@@ -407,7 +407,12 @@ export function apply(ctx: Context, config: Config): void {
   /** 单用户失败连续超过该值（多为登录墙/限流）则中止任务，避免空转。 */
   const MAX_CONSECUTIVE_FAILURES = 5
 
-  async function runBatchTask(task: BatchTask, perUser: number, maxUsers: number): Promise<void> {
+  async function runBatchTask(
+    task: BatchTask,
+    perUser: number,
+    maxUsers: number,
+    concurrency = 3,
+  ): Promise<void> {
     try {
       const handle = store.kvGet(KV_CURRENT_HANDLE)
       if (!handle) throw new ApiError(ErrorCodes.NO_ME, '尚未识别当前登录账号，请先同步一次关注列表', 404)
@@ -415,30 +420,39 @@ export function apply(ctx: Context, config: Config): void {
       if (!me) throw new ApiError(ErrorCodes.NOT_SYNCED, '本地还没有关注列表，请先同步', 404)
       const users = store.getFollowingUsers(me.id, maxUsers)
       task.total = users.length
-      let consecutiveFailures = 0
-      for (const u of users) {
-        if (task.status === 'canceled') break
-        task.current = u.handle
-        try {
-          const tweets = await fetchUserTweets(u.handle, perUser)
-          const added = persistTweets(tweets)
-          task.added += added
-          consecutiveFailures = 0
-        } catch (e) {
-          consecutiveFailures++
-          const message = e instanceof Error ? e.message : String(e)
-          console.warn(`[batch] @${u.handle} 失败(${consecutiveFailures}): ${message}`)
-          if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-            task.status = 'failed'
-            task.error = `连续失败 ${consecutiveFailures} 个用户后中止（最近: @${u.handle} ${message}）`
-            task.finishedAt = Date.now()
-            return
+      let next = 0
+      // 共享连续失败计数（并发 worker 共用；成功清零，阈值触发中止）
+      let failureStreak = 0
+
+      const worker = async (): Promise<void> => {
+        while (task.status === 'running') {
+          const i = next++
+          if (i >= users.length) return
+          const u = users[i]
+          task.current = u.handle
+          try {
+            const tweets = await fetchUserTweets(u.handle, perUser)
+            const added = persistTweets(tweets)
+            task.added += added
+            failureStreak = 0
+          } catch (e) {
+            failureStreak++
+            const message = e instanceof Error ? e.message : String(e)
+            console.warn(`[batch] @${u.handle} 失败(${failureStreak}): ${message}`)
+            if (failureStreak >= MAX_CONSECUTIVE_FAILURES) {
+              task.status = 'failed'
+              task.error = `连续失败 ${failureStreak} 个用户后中止（最近: @${u.handle} ${message}）`
+              task.finishedAt = Date.now()
+              return
+            }
           }
+          task.done++
         }
-        task.done++
       }
-      if (task.status !== 'canceled') task.status = 'done'
-      task.finishedAt = Date.now()
+
+      await Promise.all(Array.from({ length: concurrency }, worker))
+      if (task.status === 'running') task.status = 'done'
+      if (!task.finishedAt) task.finishedAt = Date.now()
     } catch (e) {
       task.status = 'failed'
       task.error = e instanceof Error ? e.message : String(e)
@@ -458,9 +472,11 @@ export function apply(ctx: Context, config: Config): void {
     // users<=0 表示全部关注（上限 5000）
     const maxUsersRaw = Number(c.req.query('users') ?? 0) || 0
     const maxUsers = maxUsersRaw <= 0 ? 5000 : Math.min(maxUsersRaw, 5000)
+    // 并发 worker 数（需 ≤ core-session maxConcurrent，超出会排队等槽位）
+    const concurrency = Math.min(Math.max(Number(c.req.query('concurrency') ?? 3) || 3, 1), 6)
     const task: BatchTask = { id: randomUUID(), status: 'running', total: 0, done: 0, added: 0, createdAt: Date.now() }
     batchTasks.set(task.id, task)
-    void runBatchTask(task, perUser, maxUsers)
+    void runBatchTask(task, perUser, maxUsers, concurrency)
     return c.json({ ok: true, data: { taskId: task.id, total: task.total }, source: 'batch', elapsedMs: 0 })
   })
 
