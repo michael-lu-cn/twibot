@@ -5,7 +5,7 @@ import { TweetCard } from "@/components/TweetCard"
 import { Button } from "@/components/ui/button"
 
 /** 推荐流主视图：本地读取 + 手动同步。 */
-export function FeedView() {
+export function FeedView({ onOpenUser }: { onOpenUser: (handle: string) => void }) {
   const [tweets, setTweets] = useState<Tweet[]>([])
   const [loaded, setLoaded] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -92,7 +92,7 @@ export function FeedView() {
         ) : (
           <>
             {tweets.map((t) => (
-              <TweetCard key={t.id || `${t.text.slice(0, 24)}-${t.time}`} tweet={t} />
+              <TweetCard key={t.id || `${t.text.slice(0, 24)}-${t.time}`} tweet={t} onOpenUser={onOpenUser} />
             ))}
           </>
         )}

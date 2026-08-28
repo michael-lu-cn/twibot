@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 /** 关注列表主视图：我关注的账号（本地读取 + 手动同步）。 */
-export function FollowingView() {
+export function FollowingView({ onOpenUser }: { onOpenUser: (handle: string) => void }) {
   const [users, setUsers] = useState<FollowingUser[]>([])
   const [handle, setHandle] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -104,7 +104,12 @@ export function FollowingView() {
         ) : (
           <>
             {users.map((u) => (
-              <div key={u.userId ?? u.handle} className="flex gap-3 border-b border-border px-4 py-3 hover:bg-accent/40">
+              <button
+                key={u.userId ?? u.handle}
+                type="button"
+                onClick={() => onOpenUser(u.handle)}
+                className="flex w-full cursor-pointer gap-3 border-b border-border px-4 py-3 text-left hover:bg-accent/40"
+              >
                 <Avatar className="size-10 shrink-0">
                   <AvatarImage src={imgProxy(u.avatarUrl)} alt={u.handle} />
                   <AvatarFallback>{(u.name || u.handle).slice(0, 1).toUpperCase()}</AvatarFallback>
@@ -116,7 +121,7 @@ export function FollowingView() {
                   </div>
                   {u.bio ? <p className="mt-0.5 line-clamp-2 text-[13px] text-foreground/80">{u.bio}</p> : null}
                 </div>
-              </div>
+              </button>
             ))}
             <div className="px-4 py-6 text-center text-[13px] text-muted-foreground/60">
               共显示 {users.length} 位关注

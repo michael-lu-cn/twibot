@@ -29,6 +29,13 @@ export const ERROR_HINTS: Record<string, string> = {
   NETWORK: "无法连接后端，请确认 API 服务已启动（127.0.0.1:12000）。",
 }
 
+export interface TweetLink {
+  /** 正文中的短链（t.co）。 */
+  url: string
+  /** 真实展开地址。 */
+  expandedUrl: string
+}
+
 export interface Tweet {
   id: string
   url: string
@@ -37,6 +44,7 @@ export interface Tweet {
   authorName: string
   authorHandle: string
   avatarUrl?: string
+  links?: TweetLink[]
   metrics?: { replies: number; reposts: number; likes: number; views: number | null } | null
 }
 
@@ -92,4 +100,19 @@ export const api = {
       `/api/following/sync?limit=${limit}`,
       { method: "POST" },
     ),
+
+  userProfile: (handle: string) => request<{ user: UserProfile | null; tweets: Tweet[] }>(`/api/users/${handle}`),
+
+  syncUserTweets: (handle: string, limit = 50) =>
+    request<{ added: number; tweets: Tweet[]; syncedAt: number }>(`/api/users/${handle}/tweets/sync?limit=${limit}`, {
+      method: "POST",
+    }),
+}
+
+export interface UserProfile {
+  id: string
+  handle: string
+  name: string
+  bio: string
+  avatarUrl: string
 }

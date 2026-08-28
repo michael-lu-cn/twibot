@@ -1,30 +1,68 @@
 import { Eye, Heart, MessageCircle, Repeat2 } from "lucide-react"
 import type { Tweet } from "@/lib/api"
-import { fmtAgo, fmtCount, imgProxy, initial } from "@/lib/format"
+import { displayUrl, fmtAgo, fmtCount, imgProxy, initial, splitLinks } from "@/lib/format"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
 /** Twitter 风格推文卡片。 */
-export function TweetCard({ tweet }: { tweet: Tweet }) {
+export function TweetCard({
+  tweet,
+  onOpenUser,
+}: {
+  tweet: Tweet
+  /** 点击作者/头像进入其主页。 */
+  onOpenUser?: (handle: string) => void
+}) {
   const m = tweet.metrics
+  const openUser = onOpenUser && tweet.authorHandle ? () => onOpenUser(tweet.authorHandle) : undefined
   return (
     <article className="flex gap-3 border-b border-border px-4 py-3 transition-colors hover:bg-accent/40">
-      <Avatar size="lg" className="mt-0.5 shrink-0">
-        {tweet.avatarUrl ? <AvatarImage src={imgProxy(tweet.avatarUrl)} alt={tweet.authorHandle} /> : null}
-        <AvatarFallback>{initial(tweet.authorName, tweet.authorHandle)}</AvatarFallback>
-      </Avatar>
+      <button
+        type="button"
+        onClick={openUser}
+        disabled={!openUser}
+        className={cn("shrink-0 rounded-full", openUser && "cursor-pointer hover:opacity-90")}
+      >
+        <Avatar size="lg" className="mt-0.5">
+          {tweet.avatarUrl ? <AvatarImage src={imgProxy(tweet.avatarUrl)} alt={tweet.authorHandle} /> : null}
+          <AvatarFallback>{initial(tweet.authorName, tweet.authorHandle)}</AvatarFallback>
+        </Avatar>
+      </button>
 
       <div className="min-w-0 flex-1">
-        {/* 作者行 */}
+        {/* 作者行（点击进主页） */}
         <div className="flex items-baseline gap-1 text-[15px]">
-          <span className="truncate font-bold text-foreground">{tweet.authorName || "—"}</span>
-          <span className="truncate text-muted-foreground">@{tweet.authorHandle}</span>
+          <button
+            type="button"
+            onClick={openUser}
+            disabled={!openUser}
+            className={cn("truncate font-bold text-foreground", openUser && "cursor-pointer hover:underline")}
+          >
+            {tweet.authorName || "—"}
+          </button>
+          <button type="button" onClick={openUser} disabled={!openUser} className="truncate text-muted-foreground">
+            @{tweet.authorHandle}
+          </button>
           {tweet.time ? <span className="shrink-0 text-muted-foreground">· {fmtAgo(tweet.time)}</span> : null}
         </div>
 
-        {/* 正文 */}
+        {/* 正文（链接可点击） */}
         <p className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-snug text-foreground">
-          {tweet.text}
+          {splitLinks(tweet.text, tweet.links).map((seg, i) =>
+            seg.type === "link" ? (
+              <a
+                key={i}
+                href={seg.expandedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="break-all text-sky-500 hover:underline"
+              >
+                {displayUrl(seg.expandedUrl)}
+              </a>
+            ) : (
+              <span key={i}>{seg.value}</span>
+            ),
+          )}
         </p>
 
         {/* 互动行 */}

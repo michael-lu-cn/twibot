@@ -122,13 +122,30 @@ export interface TweetRow {
   views: number | null
 }
 
+export interface FeedLink {
+  /** 正文中的短链（t.co）。 */
+  url: string
+  /** 真实展开地址。 */
+  expandedUrl: string
+}
+
 export interface FeedItemRow {
   tweetId: string
   position: number
   fetchedAt: number
   /** LEFT JOIN tweets/users 补全 */
   author?: { id: string; handle: string; name: string; avatarUrl: string } | null
-  tweet?: { text: string; createdAt: string; url: string; replies: number; reposts: number; likes: number; views: number | null } | null
+  tweet?: {
+    text: string
+    createdAt: string
+    url: string
+    replies: number
+    reposts: number
+    likes: number
+    views: number | null
+    /** 正文内链接（可点击渲染用）。 */
+    links: FeedLink[]
+  } | null
 }
 
 export interface StoreService {
@@ -145,6 +162,7 @@ export interface StoreService {
     reposts?: number
     likes?: number
     views?: number | null
+    links?: FeedLink[]
   }): boolean
   /** 增量写入 feed 流（position 时间轴），返回新增条数。 */
   upsertFeedPlanned(orderedTweetIds: string[]): number
@@ -162,6 +180,8 @@ export interface StoreService {
   getFollowingUsers(userId: string, limit: number): FollowingUserRow[]
   /** 关注关系最后一次同步时间。 */
   getFollowingSyncedAt(userId: string): number | null
+  /** 某人的推文列表（created_at DESC，JOIN 补全作者）。 */
+  listUserTweets(userId: string, limit: number): FeedItemRow[]
   /** 键值读写（登录账号 handle 持久化等）。 */
   kvGet(key: string): string | null
   kvSet(key: string, value: string): void
@@ -205,8 +225,16 @@ export function apply(ctx: Context, config: Config): void {
         replies INTEGER NOT NULL DEFAULT 0,
         reposts INTEGER NOT NULL DEFAULT 0,
         likes INTEGER NOT NULL DEFAULT 0,
-        views INTEGER
+        views INTEGER,
+        links TEXT NOT NULL DEFAULT ''
       );
+      CREATE INDEX IF NOT EXISTS tweets_user_idx ON tweets(user_id);
+      -- 旧库迁移：补充 links 列（幂等）
+      `)
+    try {
+      sqlite.exec(`ALTER TABLE tweets ADD COLUMN links TEXT NOT NULL DEFAULT ''`)
+    } catch {} // 列已存在
+    sqlite.exec(`
       CREATE TABLE IF NOT EXISTS feed (
         tweet_id TEXT PRIMARY KEY,
         position INTEGER NOT NULL DEFAULT 0,
@@ -246,10 +274,11 @@ export function apply(ctx: Context, config: Config): void {
 
     upsertTweet(t) {
       const existed = !!sqlite.prepare('SELECT 1 FROM tweets WHERE id = ?').get(t.id)
+      const linksJson = JSON.stringify(t.links ?? [])
       sqlite
         .prepare(
-          `INSERT INTO tweets (id, user_id, text, created_at, url, replies, reposts, likes, views)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO tweets (id, user_id, text, created_at, url, replies, reposts, likes, views, links)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
              user_id = excluded.user_id,
              text = excluded.text,
@@ -258,7 +287,8 @@ export function apply(ctx: Context, config: Config): void {
              replies = excluded.replies,
              reposts = excluded.reposts,
              likes = excluded.likes,
-             views = excluded.views`,
+             views = excluded.views,
+             links = excluded.links`,
         )
         .run(
           t.id,
@@ -270,6 +300,7 @@ export function apply(ctx: Context, config: Config): void {
           t.reposts ?? 0,
           t.likes ?? 0,
           t.views ?? null,
+          linksJson,
         )
       return !existed
     },
@@ -295,7 +326,7 @@ export function apply(ctx: Context, config: Config): void {
       const rows = sqlite
         .prepare(
           `SELECT f.tweet_id, f.position, f.fetched_at,
-                  t.user_id, t.text, t.created_at, t.url, t.replies, t.reposts, t.likes, t.views,
+                  t.user_id, t.text, t.created_at, t.url, t.replies, t.reposts, t.likes, t.views, t.links,
                   u.handle, u.name, u.avatar_url
            FROM feed f
            LEFT JOIN tweets t ON t.id = f.tweet_id
@@ -318,6 +349,7 @@ export function apply(ctx: Context, config: Config): void {
               reposts: Number(r.reposts),
               likes: Number(r.likes),
               views: r.views === null ? null : Number(r.views),
+              links: r.links ? (JSON.parse(String(r.links)) as FeedLink[]) : [],
             },
         author: r.user_id && r.handle
           ? { id: String(r.user_id), handle: String(r.handle), name: String(r.name ?? ''), avatarUrl: String(r.avatar_url ?? '') }
@@ -397,6 +429,52 @@ export function apply(ctx: Context, config: Config): void {
         .prepare('SELECT MAX(fetched_at) AS t FROM following_rels WHERE user_id = ?')
         .get(userId) as { t: number | null }
       return row.t ?? null
+    },
+
+    listUserTweets(userId, limit) {
+      const rows = sqlite
+        .prepare(
+          `SELECT t.id AS tweet_id, t.user_id, t.text, t.created_at, t.url, t.replies, t.reposts, t.likes, t.views, t.links,
+                  u.handle, u.name, u.avatar_url
+           FROM tweets t
+           LEFT JOIN users u ON u.id = t.user_id
+           WHERE t.user_id = ?
+           ORDER BY t.created_at DESC, t.id DESC
+           LIMIT ?`,
+        )
+        .all(userId, limit) as Array<{
+        tweet_id: string
+        user_id: string
+        text: string
+        created_at: string
+        url: string
+        replies: number
+        reposts: number
+        likes: number
+        views: number | null
+        links: string
+        handle: string | null
+        name: string | null
+        avatar_url: string | null
+      }>
+      return rows.map((r) => ({
+        tweetId: String(r.tweet_id),
+        position: 0,
+        fetchedAt: 0,
+        tweet: {
+          text: String(r.text),
+          createdAt: String(r.created_at),
+          url: String(r.url),
+          replies: Number(r.replies),
+          reposts: Number(r.reposts),
+          likes: Number(r.likes),
+          views: r.views === null ? null : Number(r.views),
+          links: r.links ? (JSON.parse(r.links) as FeedLink[]) : [],
+        },
+        author: r.user_id && r.handle
+          ? { id: String(r.user_id), handle: String(r.handle), name: String(r.name ?? ''), avatarUrl: String(r.avatar_url ?? '') }
+          : null,
+      }))
     },
 
     kvGet(key) {
