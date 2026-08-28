@@ -168,8 +168,11 @@ export function apply(ctx: Context, config: Config): void {
         res
           .json()
           .then((j: any) => {
-            const instructions: Array<{ entries?: GraphqlTweetEntry[] }> =
-              j?.data?.home?.timeline?.instructions ?? []
+            // HomeTimeline 真实 envelope: data.home.home_timeline_urt.instructions
+            // (兼容旧式 data.home.timeline.instructions)
+            const home = j?.data?.home
+            const urt = home?.home_timeline_urt
+            const instructions: Array<{ entries?: GraphqlTweetEntry[] }> = urt?.instructions ?? home?.timeline?.instructions ?? []
             for (const instr of instructions) {
               for (const e of instr.entries ?? []) {
                 const t = extractTweet(e as GraphqlTweetEntry)
