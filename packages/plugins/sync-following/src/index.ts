@@ -184,6 +184,15 @@ export function apply(ctx: Context, config: Config): void {
         const u = res.url()
         if (!u.includes('/graphql/') || !u.includes('Following')) return
         if (u.includes('FollowLatestTimeline')) return
+        // targetUserId：新版 X 把 userId 放在请求 URL 的 variables.userId
+        // （响应体 data.user.result 只有 __typename+timeline，无 rest_id；旧版才在响应体）
+        try {
+          const v = new URL(u).searchParams.get('variables')
+          if (v) {
+            const parsed = JSON.parse(v) as { userId?: string }
+            if (parsed?.userId) targetUserId = parsed.userId
+          }
+        } catch {}
         res
           .json()
           .then((j: any) => {
