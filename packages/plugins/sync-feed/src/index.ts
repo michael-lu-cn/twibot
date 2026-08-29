@@ -360,6 +360,44 @@ export function apply(ctx: Context, config: Config): void {
     return c.json({ ok: true, data: { tweets: rows.map(rowTweet), syncedAt: store.getFeedSyncedAt() }, source: 'database', elapsedMs: 0 })
   })
 
+  // ─── 书签：当前登录账号收藏的推文 ─────────────────────────────────────
+
+  function fetchBookmarks(limit: number): Promise<Tweet[]> {
+    return fetchTimeline(`${base}/i/bookmarks`, {
+      match: (u) => u.includes('/graphql/') && u.includes('Bookmarks'),
+      extract: (j) => {
+        // 真实 envelope: data.bookmark_timeline_v2.timeline.instructions
+        const v2 = j?.data?.bookmark_timeline_v2
+        return v2?.timeline?.instructions ?? v2?.instructions ?? []
+      },
+      label: '书签',
+    }, limit)
+  }
+
+  api.post('/api/bookmarks/sync', async (c: any) => {
+    const t0 = Date.now()
+    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 50) || 50, 1), 200)
+    try {
+      const tweets = await fetchBookmarks(limit)
+      persistTweets(tweets)
+      const ids = tweets.map((t) => t.id).filter(Boolean)
+      const added = store.upsertBookmarks(ids)
+      return c.json({ ok: true, data: { added, tweets: tweets.map(apiTweet), syncedAt: Date.now() }, source: 'sync', elapsedMs: Date.now() - t0 })
+    } catch (e) {
+      const { status, body } = errorResponse(e)
+      return c.json(body, status as 400 | 401 | 429 | 500 | 502 | 504)
+    }
+  })
+
+  api.get('/api/bookmarks', (c: any) => {
+    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 100) || 100, 1), 500)
+    const rows = store.listBookmarks(limit)
+    if (rows.length === 0) {
+      return c.json({ ok: false, error: { code: ErrorCodes.NOT_SYNCED, message: '本地还没有书签数据，请先同步' } }, 404)
+    }
+    return c.json({ ok: true, data: { tweets: rows.map(rowTweet), syncedAt: store.getBookmarksSyncedAt() }, source: 'database', elapsedMs: 0 })
+  })
+
   // ─── 用户主页：资料 + 推文 ────────────────────────────────────────────
 
   api.get('/api/users/:handle', (c: any) => {

@@ -4,6 +4,7 @@ import { Sidebar, type TabKey } from "@/components/Sidebar"
 import { FeedView } from "@/components/FeedView"
 import { FollowingView } from "@/components/FollowingView"
 import { GroupsView } from "@/components/GroupsView"
+import { BookmarksView } from "@/components/BookmarksView"
 import { UserProfileView } from "@/components/UserProfileView"
 import { CookieSetup } from "@/components/CookieSetup"
 
@@ -33,6 +34,8 @@ export default function App() {
     main = <FollowingView onOpenUser={setUserHandle} />
   } else if (tab === "groups") {
     main = <GroupsView onOpenUser={setUserHandle} />
+  } else if (tab === "bookmarks") {
+    main = <BookmarksView onOpenUser={setUserHandle} />
   } else {
     main = <FeedView onOpenUser={setUserHandle} />
   }

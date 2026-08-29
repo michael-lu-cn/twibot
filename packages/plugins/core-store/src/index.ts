@@ -190,6 +190,12 @@ export interface StoreService {
   setGroupOverride(userId: string, groupKey: string | null): void
   /** 全部手动分组覆盖：userId → groupKey。 */
   getGroupOverrides(): Map<string, string>
+  /** 书签：新增（幂等），返回新增数。 */
+  upsertBookmarks(orderedTweetIds: string[]): number
+  /** 书签列表（fetched_at DESC，JOIN 补全推文/作者）。 */
+  listBookmarks(limit: number): FeedItemRow[]
+  /** 书签最后同步时间。 */
+  getBookmarksSyncedAt(): number | null
   /** 键值读写（登录账号 handle 持久化等）。 */
   kvGet(key: string): string | null
   kvSet(key: string, value: string): void
@@ -265,6 +271,10 @@ export function apply(ctx: Context, config: Config): void {
         user_id TEXT PRIMARY KEY,
         group_key TEXT NOT NULL DEFAULT '',
         updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS bookmarks (
+        tweet_id TEXT PRIMARY KEY,
+        fetched_at INTEGER NOT NULL
       );
     `)
   }
@@ -467,6 +477,57 @@ export function apply(ctx: Context, config: Config): void {
         group_key: string
       }>
       return new Map(rows.map((r) => [r.user_id, r.group_key]))
+    },
+
+    upsertBookmarks(orderedTweetIds) {
+      if (orderedTweetIds.length === 0) return 0
+      const insertOnly = sqlite.prepare('INSERT OR IGNORE INTO bookmarks (tweet_id, fetched_at) VALUES (?, ?)')
+      let added = 0
+      for (const id of orderedTweetIds) {
+        insertOnly.run(id, Date.now())
+        added++
+      }
+      return added
+    },
+
+    listBookmarks(limit) {
+      const rows = sqlite
+        .prepare(
+          `SELECT b.tweet_id, b.fetched_at,
+                  t.user_id, t.text, t.created_at, t.url, t.replies, t.reposts, t.likes, t.views, t.links,
+                  u.handle, u.name, u.avatar_url
+           FROM bookmarks b
+           LEFT JOIN tweets t ON t.id = b.tweet_id
+           LEFT JOIN users u ON u.id = t.user_id
+           ORDER BY b.fetched_at DESC
+           LIMIT ?`,
+        )
+        .all(limit) as Array<Record<string, unknown>>
+      return rows.map((r) => ({
+        tweetId: String(r.tweet_id),
+        position: 0,
+        fetchedAt: Number(r.fetched_at),
+        tweet: r.text === undefined
+          ? null
+          : {
+              text: String(r.text),
+              createdAt: String(r.created_at),
+              url: String(r.url),
+              replies: Number(r.replies),
+              reposts: Number(r.reposts),
+              likes: Number(r.likes),
+              views: r.views === null ? null : Number(r.views),
+              links: r.links ? (JSON.parse(String(r.links)) as FeedLink[]) : [],
+            },
+        author: r.user_id && r.handle
+          ? { id: String(r.user_id), handle: String(r.handle), name: String(r.name ?? ''), avatarUrl: String(r.avatar_url ?? '') }
+          : null,
+      }))
+    },
+
+    getBookmarksSyncedAt() {
+      const row = sqlite.prepare('SELECT MAX(fetched_at) AS t FROM bookmarks').get() as { t: number | null }
+      return row.t ?? null
     },
 
     listUserTweets(userId, limit) {

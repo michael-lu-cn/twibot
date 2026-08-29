@@ -92,6 +92,14 @@ export const api = {
       method: "POST",
     }),
 
+  bookmarks: (limit = 100) =>
+    request<{ tweets: Tweet[]; syncedAt: number | null }>(`/api/bookmarks?limit=${limit}`),
+
+  syncBookmarks: (limit = 100) =>
+    request<{ added: number; tweets: Tweet[]; syncedAt: number }>(`/api/bookmarks/sync?limit=${limit}`, {
+      method: "POST",
+    }),
+
   following: (limit = 200) =>
     request<{ handle: string; users: FollowingUser[]; syncedAt: number | null }>(`/api/following?limit=${limit}`),
 
