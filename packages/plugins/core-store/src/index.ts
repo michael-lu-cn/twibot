@@ -180,10 +180,16 @@ export interface StoreService {
   getFollowingUsers(userId: string, limit: number): FollowingUserRow[]
   /** 关注关系最后一次同步时间。 */
   getFollowingSyncedAt(userId: string): number | null
+  /** 移除一条关注关系（取关后本地同步）。 */
+  removeFollowingRel(userId: string, followsId: string): void
   /** 某人的推文列表（created_at DESC，JOIN 补全作者）。 */
   listUserTweets(userId: string, limit: number): FeedItemRow[]
   /** 已有推文的 userId 集合（批量续跑跳过已抓用）。 */
   getUserIdsWithTweets(): string[]
+  /** 手动分组覆盖（groupKey 为空=清除恢复自动）。 */
+  setGroupOverride(userId: string, groupKey: string | null): void
+  /** 全部手动分组覆盖：userId → groupKey。 */
+  getGroupOverrides(): Map<string, string>
   /** 键值读写（登录账号 handle 持久化等）。 */
   kvGet(key: string): string | null
   kvSet(key: string, value: string): void
@@ -254,6 +260,11 @@ export function apply(ctx: Context, config: Config): void {
         position INTEGER NOT NULL DEFAULT 0,
         fetched_at INTEGER NOT NULL,
         PRIMARY KEY (user_id, follows_id)
+      );
+      CREATE TABLE IF NOT EXISTS user_group_overrides (
+        user_id TEXT PRIMARY KEY,
+        group_key TEXT NOT NULL DEFAULT '',
+        updated_at INTEGER NOT NULL
       );
     `)
   }
@@ -431,6 +442,31 @@ export function apply(ctx: Context, config: Config): void {
         .prepare('SELECT MAX(fetched_at) AS t FROM following_rels WHERE user_id = ?')
         .get(userId) as { t: number | null }
       return row.t ?? null
+    },
+
+    removeFollowingRel(userId, followsId) {
+      sqlite.prepare('DELETE FROM following_rels WHERE user_id = ? AND follows_id = ?').run(userId, followsId)
+    },
+
+    setGroupOverride(userId, groupKey) {
+      if (!groupKey) {
+        sqlite.prepare('DELETE FROM user_group_overrides WHERE user_id = ?').run(userId)
+        return
+      }
+      sqlite
+        .prepare(
+          `INSERT INTO user_group_overrides (user_id, group_key, updated_at) VALUES (?, ?, ?)
+           ON CONFLICT(user_id) DO UPDATE SET group_key = excluded.group_key, updated_at = excluded.updated_at`,
+        )
+        .run(userId, groupKey, Date.now())
+    },
+
+    getGroupOverrides() {
+      const rows = sqlite.prepare('SELECT user_id, group_key FROM user_group_overrides').all() as Array<{
+        user_id: string
+        group_key: string
+      }>
+      return new Map(rows.map((r) => [r.user_id, r.group_key]))
     },
 
     listUserTweets(userId, limit) {

@@ -112,6 +112,16 @@ const server = http.createServer((req, res) => {
     res.end('<!doctype html><html><body><h1>mock x</h1><script>fetch("/graphql/HomeTimeline?x=1").catch(()=>{})</script></body></html>')
     return
   }
+  // 用户 profile 页（取关流程 mock：已关注按钮点击后变 Follow）
+  if (url.startsWith('/') && url.length > 1 && !url.startsWith('/api')) {
+    res.setHeader('content-type', 'text/html')
+    res.end(
+      `<!doctype html><html><body><h1>@${decodeURIComponent(url.slice(1))}</h1>` +
+        `<button data-testid="142-follow-button" onclick="this.textContent='Follow';this.removeAttribute('data-testid')">Following</button>` +
+        `<button data-testid="confirm-unfollow" style="display:none">Unfollow</button></body></html>`,
+    )
+    return
+  }
   res.setHeader('content-type', 'application/json')
   res.end('{}')
 })

@@ -1,3 +1,7 @@
+- id: core-store
+  config:
+    file: data/twibot.mock.db
+
 - id: core-session
   config:
     proxy: ""

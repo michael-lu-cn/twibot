@@ -113,7 +113,17 @@ export const api = {
 
   batchTask: (taskId: string) => request<BatchTask>(`/api/batch/user-tweets/task/${taskId}`),
 
-  smartGroups: () => request<{ groups: SmartGroup[]; otherCount: number; total: number; generatedAt: number }>("/api/groups/auto"),
+  smartGroups: () => request<{ groups: SmartGroup[]; options: GroupOption[]; total: number; generatedAt: number }>("/api/groups/auto"),
+
+  unfollow: (handle: string) =>
+    request<{ unfollowed: boolean; handle: string }>(`/api/users/${handle}/unfollow`, { method: "POST" }),
+
+  setGroupOverride: (userId: string, groupKey: string) =>
+    request<{ userId: string; groupKey: string | null }>("/api/groups/override", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId, groupKey }),
+    }),
 }
 
 export interface UserProfile {
@@ -151,4 +161,9 @@ export interface SmartGroup {
   id: string
   name: string
   users: SmartGroupMember[]
+}
+
+export interface GroupOption {
+  id: string
+  name: string
 }

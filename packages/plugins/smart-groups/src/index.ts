@@ -33,8 +33,8 @@ export interface GroupInfo {
 
 export interface SmartGroupsResult {
   groups: GroupInfo[]
-  /** 未归入任何主题组（含中文组）的用户数量。 */
-  otherCount: number
+  /** 可用的分组选项（改分组按钮用，含 未分组）。 */
+  options: Array<{ id: string; name: string }>
   total: number
   generatedAt: number
 }
@@ -183,17 +183,21 @@ export function apply(ctx: Context, config: Config): void {
       return c.json({ ok: false, error: { code: 'NOT_SYNCED', message: '本地还没有关注列表，请先同步' } }, 404)
     }
     const users = store.getFollowingUsers(me.id, 5000) as Array<{ id: string; handle: string; name: string; bio: string; avatarUrl: string }>
+    const overrides = store.getGroupOverrides() as Map<string, string>
 
     const groups = new Map<string, GroupInfo>(GROUP_DEFS.map((g) => [g.id, { id: g.id, name: g.name, users: [] }]))
     groups.set('chinese', { id: 'chinese', name: '中文内容', users: [] })
+    groups.set('other', { id: 'other', name: '未分组', users: [] })
 
-    let otherCount = 0
     for (const u of users) {
       const rows = store.listUserTweets(u.id, 20) as Array<{
         tweet?: { text: string; createdAt: string } | null
       }>
       const recentTweets = rows.map((r) => r.tweet?.text ?? '').filter(Boolean)
-      const { groupId, matched } = classifyUser(u.bio ?? '', recentTweets)
+      // 手动覆盖优先；覆盖组需存在（非法 key 视同清除）
+      const override = overrides.get(u.id) ?? ''
+      const validOverride = groups.has(override) ? override : ''
+      const auto = validOverride ? { groupId: validOverride, matched: ['手动分组'] } : classifyUser(u.bio ?? '', recentTweets)
       const member: GroupMember = {
         userId: u.id,
         handle: u.handle,
@@ -202,13 +206,9 @@ export function apply(ctx: Context, config: Config): void {
         bio: u.bio ?? '',
         tweetCount: recentTweets.length,
         recentSample: recentTweets[0]?.slice(0, 80) ?? '',
-        matched,
+        matched: auto.matched,
       }
-      if (groupId === 'other') {
-        otherCount++
-        continue
-      }
-      groups.get(groupId)?.users.push(member)
+      groups.get(auto.groupId)?.users.push(member)
     }
 
     // 按人数降序，空组剔除
@@ -216,11 +216,39 @@ export function apply(ctx: Context, config: Config): void {
       .filter((g) => g.users.length > 0)
       .sort((a, b) => b.users.length - a.users.length)
 
+    // 可选分组（改分组按钮选项）：主题组 + 中文内容 + 未分组
+    const options: Array<{ id: string; name: string }> = [
+      ...GROUP_DEFS.map((g) => ({ id: g.id, name: g.name })),
+      { id: 'chinese', name: '中文内容' },
+      { id: 'other', name: '未分组' },
+    ]
+
     return c.json({
       ok: true,
-      data: { groups: result, otherCount, total: users.length, generatedAt: Date.now() } satisfies SmartGroupsResult,
+      data: { groups: result, options, total: users.length, generatedAt: Date.now() } satisfies SmartGroupsResult,
       source: 'smart-groups',
       elapsedMs: 0,
     })
+  })
+
+  // 手动分组覆盖：body { userId, groupKey }；groupKey 为空 = 清除恢复自动
+  api.post('/api/groups/override', async (c: any) => {
+    let body: { userId?: string; groupKey?: string } = {}
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: '请求体需为 JSON：{ userId, groupKey }' } }, 400)
+    }
+    const userId = body.userId ?? ''
+    if (!userId) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: '缺少 userId' } }, 400)
+    const groupKey = (body.groupKey ?? '').trim()
+    if (groupKey) {
+      const valid = GROUP_DEFS.some((g) => g.id === groupKey) || groupKey === 'chinese' || groupKey === 'other'
+      if (!valid) {
+        return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `无效分组: ${groupKey}` } }, 400)
+      }
+    }
+    store.setGroupOverride(userId, groupKey || null)
+    return c.json({ ok: true, data: { userId, groupKey: groupKey || null }, source: 'smart-groups', elapsedMs: 0 })
   })
 }

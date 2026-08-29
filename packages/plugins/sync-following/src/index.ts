@@ -21,6 +21,8 @@ export const ErrorCodes = {
   RATE_LIMITED: 'RATE_LIMITED',
   SCRAPE_FAILED: 'SCRAPE_FAILED',
   NOT_SYNCED: 'NOT_SYNCED',
+  NOT_FOUND: 'NOT_FOUND',
+  NOT_FOLLOWING: 'NOT_FOLLOWING',
   BAD_REQUEST: 'BAD_REQUEST',
 } as const
 
@@ -338,6 +340,106 @@ export function apply(ctx: Context, config: Config): void {
     } catch (e) {
       const { status, body } = errorResponse(e)
       return c.json(body, status as 400 | 401 | 404 | 429 | 500 | 502 | 504)
+    }
+  })
+
+  // ─── 取关：真实在 X 上取消关注 + 本地移除关系 ──────────────────────────
+
+  /** 页面内点击「取消关注」主按钮（兼容中英文 UI）。 */
+  const UNFOLLOW_CLICK_SCRIPT = `
+    (() => {
+      const FOLLOWING = ['Following', '已关注', '正在关注']
+      const pick = (pred) => Array.from(document.querySelectorAll('button')).find(pred)
+      const isFollowing = (b) => {
+        const t = (b.textContent ?? '').trim()
+        return FOLLOWING.some((w) => t.startsWith(w)) && (b.getAttribute('data-testid') || '').includes('follow')
+      }
+      const btn = pick(isFollowing)
+      if (!btn) return { ok: false, reason: 'not_following' }
+      btn.click()
+      return { ok: true }
+    })()
+  `
+
+  const UNFOLLOW_CONFIRM_SCRIPT = `
+    (() => {
+      const btn = Array.from(document.querySelectorAll('button')).find((b) => {
+        const t = (b.textContent ?? '').trim()
+        return (t === 'Unfollow' || t === '取消关注') && b.getAttribute('data-testid') !== null
+      })
+      if (!btn) return { ok: false, reason: 'no_confirm' }
+      btn.click()
+      return { ok: true }
+    })()
+  `
+
+  const VERIFY_UNFOLLOWED_SCRIPT = `
+    (() => {
+      const t = Array.from(document.querySelectorAll('button'))
+        .map((b) => (b.textContent ?? '').trim())
+        .find((t) => t === 'Follow' || t === '关注' || t === '+ 关注')
+      return t || ''
+    })()
+  `
+
+  api.post('/api/users/:handle/unfollow', async (c: any) => {
+    const t0 = Date.now()
+    const handle = c.req.param('handle')
+    try {
+      const creds = (ctx as any).credential as { hasRequired?: () => boolean } | undefined
+      if (creds?.hasRequired && !creds.hasRequired()) {
+        throw new ApiError(ErrorCodes.NO_COOKIES, '需要 X 登录态：请先在认证设置粘贴你的 cookie', 401)
+      }
+      const target = store.getUserByHandle(handle)
+      if (!target) {
+        throw new ApiError(ErrorCodes.NOT_FOUND, `本地没有 @${handle} 的资料，暂无法取关`, 404)
+      }
+      const meHandle = resolveHandleCached()
+      const me = meHandle ? store.getUserByHandle(meHandle) : null
+
+      const s = await session.launch()
+      const { page } = s
+      try {
+        await page.goto(`${base}/${handle}`, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS })
+        await page.waitForTimeout(2500)
+        const body = await page.evaluate(() => document.body?.innerText?.slice(0, 600) ?? '').catch(() => '')
+        if (session.verify && (await session.verify(page).then((v: { valid: boolean }) => !v.valid).catch(() => false))) {
+          throw new ApiError(ErrorCodes.AUTH_FAILED, '登录态失效：cookie 过期或无效，请更新登录凭据', 401)
+        }
+        if (!body) throw new ApiError(ErrorCodes.SCRAPE_FAILED, '页面未加载（可能被限流）', 502)
+
+        const clicked = (await page.evaluate(UNFOLLOW_CLICK_SCRIPT).catch(() => null)) as { ok: boolean; reason?: string } | null
+        if (!clicked?.ok) {
+          if (clicked?.reason === 'not_following') {
+            throw new ApiError(ErrorCodes.NOT_FOLLOWING, `@${handle} 当前未被关注（可能已在 X 取关）`, 409)
+          }
+          throw new ApiError(ErrorCodes.SCRAPE_FAILED, '未能找到取关按钮（页面结构可能变化）', 502)
+        }
+
+        // 等待状态变化；可能出现确认框则补点确认
+        await page.waitForTimeout(1500)
+        let state = (await page.evaluate(VERIFY_UNFOLLOWED_SCRIPT).catch(() => '')) || ''
+        if (!state) {
+          // 可能弹了确认框：再点一次「取消关注」
+          const confirmed = (await page.evaluate(UNFOLLOW_CONFIRM_SCRIPT).catch(() => null)) as { ok: boolean } | null
+          if (confirmed?.ok) {
+            await page.waitForTimeout(1500)
+            state = (await page.evaluate(VERIFY_UNFOLLOWED_SCRIPT).catch(() => '')) || ''
+          }
+        }
+        if (state !== 'Follow' && state !== '关注' && state !== '+ 关注') {
+          throw new ApiError(ErrorCodes.SCRAPE_FAILED, '取关后状态未变化（可能需要人工处理）', 502)
+        }
+
+        // 本地同步移除关系
+        if (me) store.removeFollowingRel(me.id, target.id)
+        return c.json({ ok: true, data: { unfollowed: true, handle, localRemoved: !!me }, source: 'following', elapsedMs: Date.now() - t0 })
+      } finally {
+        await s.close()
+      }
+    } catch (e) {
+      const { status, body } = errorResponse(e)
+      return c.json(body, status as 400 | 401 | 404 | 409 | 429 | 500 | 502 | 504)
     }
   })
 }

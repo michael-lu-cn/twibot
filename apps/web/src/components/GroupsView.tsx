@@ -1,34 +1,39 @@
 import { useEffect, useState } from "react"
 import { Tags, Users } from "lucide-react"
-import { api, isOk, ERROR_HINTS, type ApiResult, type SmartGroup } from "@/lib/api"
+import { api, isOk, ERROR_HINTS, type GroupOption, type SmartGroup } from "@/lib/api"
 import { imgProxy } from "@/lib/format"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { MemberActions } from "@/components/MemberActions"
 import { cn } from "@/lib/utils"
 
-/** 智能分组视图：按最近推文记录自动归类关注者。 */
+/** 智能分组视图：按最近推文记录自动归类关注者（未分组也展示，可改分组/取关）。 */
 export function GroupsView({ onOpenUser }: { onOpenUser: (handle: string) => void }) {
   const [groups, setGroups] = useState<SmartGroup[]>([])
-  const [otherCount, setOtherCount] = useState(0)
+  const [options, setOptions] = useState<GroupOption[]>([])
   const [active, setActive] = useState(0)
   const [loaded, setLoaded] = useState(false)
   const [msg, setMsg] = useState<{ kind: "error" | "info"; text: string } | null>(null)
 
+  async function load() {
+    const r = await api.smartGroups()
+    if (isOk(r)) {
+      setGroups(r.data.groups)
+      setOptions(r.data.options)
+      setMsg(null)
+    } else {
+      const hint = ERROR_HINTS[r.error.code] ?? r.error.message
+      setMsg({ kind: "error", text: hint })
+    }
+    setLoaded(true)
+  }
+
   useEffect(() => {
-    void (async () => {
-      const r = await api.smartGroups()
-      if (isOk(r)) {
-        setGroups(r.data.groups)
-        setOtherCount(r.data.otherCount)
-      } else {
-        const hint = ERROR_HINTS[r.error.code] ?? r.error.message
-        setMsg({ kind: "error", text: hint })
-      }
-      setLoaded(true)
-    })()
+    void load()
   }, [])
 
   const activeGroup = groups[active]
-  const total = groups.reduce((n, g) => n + g.users.length, 0) + otherCount
+  const other = groups.find((g) => g.id === "other")
+  const total = groups.reduce((n, g) => n + g.users.length, 0)
 
   return (
     <div className="min-w-0 flex-1 border-x border-border">
@@ -38,7 +43,8 @@ export function GroupsView({ onOpenUser }: { onOpenUser: (handle: string) => voi
             <Tags className="size-5 text-sky-500" /> 智能分组
           </h1>
           <p className="text-[13px] text-muted-foreground">
-            根据资料与最近推文自动归类 · {total} 位关注 · {groups.length} 组{otherCount > 0 ? ` · ${otherCount} 位未归类` : ""}
+            根据资料与最近推文自动归类 · {total} 位关注 · {groups.length} 组
+            {other && other.users.length > 0 ? `（未分组 ${other.users.length} 位）` : ""}
           </p>
         </div>
       </header>
@@ -47,7 +53,7 @@ export function GroupsView({ onOpenUser }: { onOpenUser: (handle: string) => voi
         <div className="bg-destructive/10 px-4 py-2 text-[13px] text-destructive">{msg.text}</div>
       ) : null}
 
-      {/* 组导航 chips */}
+      {/* 组导航 chips（含「未分组」） */}
       <div className="flex gap-2 overflow-x-auto border-b border-border px-4 py-2.5">
         {!loaded ? (
           <div className="h-7 w-48 animate-pulse rounded-full bg-muted" />
@@ -87,10 +93,12 @@ export function GroupsView({ onOpenUser }: { onOpenUser: (handle: string) => voi
         ) : !activeGroup ? null : (
           <>
             {activeGroup.users.map((u) => (
-              <button
+              <div
                 key={u.userId ?? u.handle}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => onOpenUser(u.handle)}
+                onKeyDown={(e) => e.key === "Enter" && onOpenUser(u.handle)}
                 className="flex w-full cursor-pointer gap-3 border-b border-border px-4 py-3 text-left hover:bg-accent/40"
               >
                 <Avatar className="size-10 shrink-0">
@@ -118,8 +126,15 @@ export function GroupsView({ onOpenUser }: { onOpenUser: (handle: string) => voi
                       ))}
                     </div>
                   ) : null}
+                  <MemberActions
+                    userId={u.userId}
+                    handle={u.handle}
+                    currentGroup={activeGroup.id === "other" ? undefined : activeGroup.id}
+                    options={options}
+                    onChanged={() => void load()}
+                  />
                 </div>
-              </button>
+              </div>
             ))}
             <div className="flex items-center justify-center gap-1.5 px-4 py-4 text-[13px] text-muted-foreground/50">
               <Users className="size-4" /> {activeGroup.name} · 共 {activeGroup.users.length} 位

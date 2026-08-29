@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react"
 import { RefreshCw, UserRound, ListTree } from "lucide-react"
-import { api, isOk, ERROR_HINTS, type ApiResult, type BatchTask, type FollowingUser } from "@/lib/api"
+import { api, isOk, ERROR_HINTS, type ApiResult, type BatchTask, type FollowingUser, type GroupOption } from "@/lib/api"
 import { imgProxy } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { MemberActions } from "@/components/MemberActions"
 
 /** 关注列表主视图：我关注的账号（本地读取 + 手动同步）。 */
 export function FollowingView({ onOpenUser }: { onOpenUser: (handle: string) => void }) {
@@ -12,6 +13,7 @@ export function FollowingView({ onOpenUser }: { onOpenUser: (handle: string) => 
   const [loaded, setLoaded] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [batch, setBatch] = useState<BatchTask | null>(null)
+  const [options, setOptions] = useState<GroupOption[]>([])
   const [msg, setMsg] = useState<{ kind: "error" | "info"; text: string } | null>(null)
 
   const showErr = (r: ApiResult<unknown>) => {
@@ -30,6 +32,9 @@ export function FollowingView({ onOpenUser }: { onOpenUser: (handle: string) => 
       showErr(r)
     }
     setLoaded(true)
+    // 顺带拉分组选项（供改分组按钮；无分组数据时静默）
+    const g = await api.smartGroups()
+    if (isOk(g)) setOptions(g.data.options)
   }
 
   useEffect(() => {
@@ -163,10 +168,12 @@ export function FollowingView({ onOpenUser }: { onOpenUser: (handle: string) => 
         ) : (
           <>
             {users.map((u) => (
-              <button
+              <div
                 key={u.userId ?? u.handle}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => onOpenUser(u.handle)}
+                onKeyDown={(e) => e.key === "Enter" && onOpenUser(u.handle)}
                 className="flex w-full cursor-pointer gap-3 border-b border-border px-4 py-3 text-left hover:bg-accent/40"
               >
                 <Avatar className="size-10 shrink-0">
@@ -179,8 +186,14 @@ export function FollowingView({ onOpenUser }: { onOpenUser: (handle: string) => 
                     <p className="truncate text-[13px] text-muted-foreground">@{u.handle}</p>
                   </div>
                   {u.bio ? <p className="mt-0.5 line-clamp-2 text-[13px] text-foreground/80">{u.bio}</p> : null}
+                  <MemberActions
+                    userId={u.userId ?? ""}
+                    handle={u.handle}
+                    options={options}
+                    onChanged={() => void loadFollowing()}
+                  />
                 </div>
-              </button>
+              </div>
             ))}
             <div className="px-4 py-6 text-center text-[13px] text-muted-foreground/60">
               共显示 {users.length} 位关注
