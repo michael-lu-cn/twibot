@@ -1,0 +1,30 @@
+{
+  "name": "@twibot/face-shell",
+  "private": true,
+  "version": "0.1.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "npx expo start --dev-client",
+    "android": "npx expo run:android",
+    "prebuild": "npx expo prebuild -p android",
+    "test": "../../node_modules/.bin/vitest run",
+    "typecheck": "../../node_modules/.bin/tsc --noEmit"
+  },
+  "comments": "本包在无 Android 工具链的机器上只作源码交付；在开发机上先 `npm install` 再 `npx expo install --fix` 校准版本（SDK 57 档）。",
+  "dependencies": {
+    "@callstack/repack": "^5.3.0",
+    "@twibot/face-cordis-kernel": "*",
+    "@twibot/face-priority-slot": "*",
+    "@twibot/face-protocol-client": "*",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "expo": "~57.0.0",
+    "react": "^19.2.3",
+    "react-native": "0.86.0",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0",
+    "@types/react": "~19.1.0",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "@twibot/face-priority-slot",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "实验 3：priority slot 组合核心（平台无关 TS；同 cell 按 priority 升序遮蔽，最低者渲染）",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "../../node_modules/.bin/vitest run",
+    "typecheck": "../../node_modules/.bin/tsc --noEmit"
+  },
+  "dependencies": {
+    "zustand": "^5.0.15"
+  }
+}

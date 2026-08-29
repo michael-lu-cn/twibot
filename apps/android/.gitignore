@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.npm-cache/
+*.tsbuildinfo
+expo/.expo/
+apps/shell/android/
+apps/shell/ios/

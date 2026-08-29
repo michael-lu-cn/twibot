@@ -1,0 +1,26 @@
+{
+  "name": "android-face",
+  "private": true,
+  "type": "module",
+  "description": "Cordis × React Native 插件化 Android 计划 2.0 的 MVP 工作区（实验 0–4）",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/ws": "^8.18.1",
+    "eas-cli": "^22.2.0",
+    "tsup": "^8.5.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11",
+    "ws": "^8.21.3"
+  }
+}

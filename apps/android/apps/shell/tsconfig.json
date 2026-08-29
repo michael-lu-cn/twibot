@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "allowImportingTsExtensions": true
+  },
+  "extends": "expo/tsconfig.base",
+  "exclude": ["node_modules", "android", "babel.config.js", "repack.config.mjs", "src/script-loader.ts", "tests/legacy-dsh"]
+}

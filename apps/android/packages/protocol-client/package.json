@@ -1,0 +1,18 @@
+{
+  "name": "@twibot/face-protocol-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "React Native Android 客户端直连 dsh (deepseek-harness) 宿主的信封协议客户端（实验 2）",
+  "exports": {
+    ".": "./src/client.ts",
+    "./protocol": "./src/protocol.ts"
+  },
+  "scripts": {
+    "test": "../../node_modules/.bin/vitest run",
+    "typecheck": "../../node_modules/.bin/tsc --noEmit"
+  },
+  "dependencies": {
+    "zustand": "^5.0.15"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@twibot/face-cordis-kernel",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "实验 0/1：vendored Cordis 内核单文件预打包（含 WeakRef/Object.hasOwn 补丁 banner）",
+  "main": "./dist/cordis.kernel.js",
+  "module": "./dist/cordis.kernel.js",
+  "exports": {
+    ".": "./dist/cordis.kernel.js"
+  },
+  "scripts": {
+    "build": "tsup --config tsup.config.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zustand": "^5.0.15"
+  }
+}

@@ -1,0 +1,4 @@
+# CMake modules and non-optional help files which must not be deleted by the admin
+package-contains-documentation-outside-usr-share-doc [usr/share/*]
+# False positive for AIX only shell script
+shell-script-fails-syntax-check [usr/share/cmake-*/Modules/Platform/AIX/ExportImportList]

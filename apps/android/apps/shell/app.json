@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Twibot Face",
+    "slug": "twibot-face",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "jsEngine": "hermes",
+    "platforms": [
+      "android"
+    ],
+    "android": {
+      "package": "org.twibot.face",
+      "usesCleartextTraffic": true
+    },
+    "_comment_engine": "MVP 设备验证阶段用 hermes（官方支持组合）。JSC 为形态C/P4硬前提，其新架构打包问题已立项跟进（见 docs/mvp-report.md 跟进清单）。"
+  }
+}
