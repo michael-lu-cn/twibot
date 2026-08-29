@@ -1,46 +1,60 @@
 /**
- * A2: 路由纯函数（对齐 web 版 lib/router.ts 语义）。
- * 覆盖：path 解析、Route→path、深链双向转换、未知回退。
+ * M1: ui-router 组合路由装配。
+ * 凭据状态决定 main/body 从 AuthScreen 还是 FeedScreen 渲染；失败安全默认 AuthScreen。
  */
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { deepLinkToPath, parseRoutePath, routeToDeepLink, routeToPath } from '../src/lib/router'
+import { boot, MAIN_SLOT } from '../src/index'
+import { MAIN_BODY_KEY } from '../src/types'
 
-describe('parseRoutePath', () => {
-  it('五个页签 + 空串 + 未知回退', () => {
-    expect(parseRoutePath('/bookmarks')).toEqual({ tab: 'bookmarks' })
-    expect(parseRoutePath('/following')).toEqual({ tab: 'following' })
-    expect(parseRoutePath('/groups')).toEqual({ tab: 'groups' })
-    expect(parseRoutePath('/auth')).toEqual({ tab: 'auth' })
-    expect(parseRoutePath('')).toEqual({ tab: 'home' })
-    expect(parseRoutePath('/')).toEqual({ tab: 'home' })
-    expect(parseRoutePath('/nonsense')).toEqual({ tab: 'home' })
-  })
+function stubFetch(credentialBody: unknown, fail = false) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (fail) throw new Error('ECONNREFUSED')
+      if (String(url).includes('/api/credential/status')) {
+        return new Response(JSON.stringify(credentialBody), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      // 宿主首页（__DSH_BOOT__ 清单探测）：无图谱 → 回退本地基线
+      return new Response('<html></html>', { status: 200 })
+    }),
+  )
+}
 
-  it('用户主页：users/<handle> → userHandle', () => {
-    expect(parseRoutePath('/users/foo_bar')).toEqual({ tab: 'home', userHandle: 'foo_bar' })
-    expect(parseRoutePath('/users/')).toEqual({ tab: 'home' })
-    // 中文 handle（实际少见）经 encodeURIComponent 往返
-    expect(parseRoutePath('/users/%E6%B5%8B%E8%AF%95')).toEqual({ tab: 'home', userHandle: '测试' })
-  })
+const settle = () => new Promise((resolve) => setTimeout(resolve, 30))
 
-  it('多余段忽略后续', () => {
-    expect(parseRoutePath('/bookmarks/extra')).toEqual({ tab: 'bookmarks' })
-  })
+afterEach(() => {
+  vi.unstubAllGlobals()
 })
 
-describe('routeToPath / routeToDeepLink', () => {
-  it('页签与用户双向', () => {
-    expect(routeToPath({ tab: 'bookmarks' })).toBe('/bookmarks')
-    expect(routeToPath({ tab: 'home', userHandle: 'a/b' })).toBe('/users/a%2Fb')
-    expect(routeToDeepLink({ tab: 'groups' })).toBe('twibot://groups')
-    expect(routeToDeepLink({ tab: 'home', userHandle: 'foo' })).toBe('twibot://users/foo')
+describe('ui-router 装配', () => {
+  it('凭据已配置 → main/body = FeedScreen', async () => {
+    stubFetch({ ok: true, data: { configured: true, keys: ['ct0'], source: 'file' }, source: 'db', elapsedMs: 0 })
+    const shell = await boot('http://host')
+    await settle()
+    const winner = shell.slots.resolveSlot(MAIN_SLOT, MAIN_BODY_KEY)
+    expect(winner).toBeTruthy()
+    expect((winner!.entry as { component: { name?: string } }).component.name).toContain('FeedScreen')
   })
 
-  it('深链 → path 与非法 scheme', () => {
-    expect(deepLinkToPath('twibot://bookmarks')).toBe('/bookmarks')
-    expect(deepLinkToPath('twibot://users/foo')).toBe('/users/foo')
-    expect(deepLinkToPath('https://x.com/home')).toBeNull()
-    expect(deepLinkToPath('twibot://')).toBe('/')
+  it('未配置 → main/body = AuthScreen', async () => {
+    stubFetch({ ok: true, data: { configured: false, keys: [], source: 'none' }, source: 'db', elapsedMs: 0 })
+    const shell = await boot('http://host')
+    await settle()
+    const winner = shell.slots.resolveSlot(MAIN_SLOT, MAIN_BODY_KEY)
+    expect(winner).toBeTruthy()
+    expect((winner!.entry as { component: { name?: string } }).component.name).toContain('AuthScreen')
+  })
+
+  it('凭据探测失败 → 安全默认 AuthScreen', async () => {
+    stubFetch({}, true)
+    const shell = await boot('http://host')
+    await settle()
+    const winner = shell.slots.resolveSlot(MAIN_SLOT, MAIN_BODY_KEY)
+    expect(winner).toBeTruthy()
+    expect((winner!.entry as { component: { name?: string } }).component.name).toContain('AuthScreen')
   })
 })

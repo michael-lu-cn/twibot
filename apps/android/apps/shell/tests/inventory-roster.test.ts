@@ -36,7 +36,7 @@ const item = (overrides: Record<string, unknown>) => ({
 describe('composeRoster 纯策略', () => {
   it('基线一行永远在场(ui-hello 空壳);空清单 = M0 默认行为', () => {
     const { entries, deferred } = composeRoster({ baseUrl: 'http://h', inventory: [] })
-    expect(entries.map((entry: RosterEntry) => entry.id)).toEqual(['ui-hello'])
+    expect(entries.map((entry: RosterEntry) => entry.id)).toEqual(['ui-router'])
     expect(deferred).toEqual([])
   })
 
@@ -79,7 +79,7 @@ describe('composeRoster 纯策略', () => {
 
   it('ui-hello 行的 baseUrl 始终取运行时输入', () => {
     const { entries } = composeRoster({ baseUrl: 'http://from-input', inventory: [] })
-    expect(entries[0]).toMatchObject({ id: 'ui-hello', config: { baseUrl: 'http://from-input' } })
+    expect(entries[0]).toMatchObject({ id: 'ui-router', config: { baseUrl: 'http://from-input' } })
   })
 })
 
@@ -93,7 +93,7 @@ describe('boot × MockHost:装配级接线(清单来源 = __DSH_BOOT__ 图谱)',
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
 
     const shell = await boot(host.baseUrl)
-    expect(shell.roster.get().map((entry) => entry.id)).toEqual(['ui-hello'])
+    expect(shell.roster.get().map((entry) => entry.id)).toEqual(['ui-router'])
     expect(infoSpy).toHaveBeenCalledWith(
       expect.stringContaining('远端 chunk 候补 1 个'),
     )

@@ -11,6 +11,7 @@ import type { SlotCore } from '@twibot/face-priority-slot'
 import type { CordisPlugin } from '@twibot/face-cordis-kernel'
 import { chatUIPlugin } from './plugins/chat-ui'
 import { helloPlugin } from './plugins/hello'
+import { routerPlugin } from './plugins/router'
 import { connectionPlugin } from './plugins/connection'
 import { framePlugin } from './plugins/frame'
 import { sessionPlugin } from './plugins/sessions'
@@ -33,6 +34,7 @@ const MODULE_TABLE: Record<string, PluginFactory> = {
   'session-store': () => sessionPlugin,
   'ui-chat': (env) => chatUIPlugin(env.slots),
   'ui-hello': (env) => helloPlugin(env.slots),
+  'ui-router': (env) => routerPlugin(env.slots),
   'ui-frame': (env) => framePlugin(env),
 }
 

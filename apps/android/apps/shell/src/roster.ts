@@ -76,9 +76,9 @@ export function createRosterStore(entries: readonly RosterEntry[]): RosterStore 
  * 删掉任意一行并热重载,对应能力即从壳上消失——这是 P1 的验收动作。
  */
 export function defaultRoster(baseUrl: string): RosterEntry[] {
-  // twibot face：M0 空壳欢迎插件（验证 face→宿主链路）；M1 起替换为 ui-auth/ui-feed 等业务插件。
+  // twibot face：M1 组合路由（按凭据装配认证/推荐流/用户主页三屏）。
   return [
-    { id: 'ui-hello', module: 'ui-hello', config: { baseUrl } },
+    { id: 'ui-router', module: 'ui-router', config: { baseUrl } },
     // P2.2 管线演示行不常驻基线:时钟面板走 Metro chunk,由设备组合层
     // (apps/shell/App.tsx 在 boot 后追加)。基线保持网络无关,Node 单测可离线跑;
     // 复演构建: bash scripts/build-chunk.sh clock-panel
