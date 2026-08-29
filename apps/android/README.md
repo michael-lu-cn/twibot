@@ -41,11 +41,20 @@ bash ../scripts/patch-gradle-mirrors.sh .  # 镜像 + hermesc shim（aarch64 Lin
 cd android && ./gradlew assembleRelease   # 或 assembleDebug
 ```
 
-## 连接拓扑（模拟器在远端 Mac，与本机 API 的连通为连接课题）
+## 连接拓扑（M0 已验证：模拟器 → 宿主 API 全链路）
 
 - 模拟器经 ssh 驱动（`scripts/drive-emulator.sh`，key `~/.ssh/cordis_face_ed25519`，远端 `grant@172.16.74.1`）。
-- 本机 twibot API 在 `127.0.0.1:12000`；App 内 baseUrl 可配置。
-- M0 空壳验收：release 包内嵌 JS，不依赖 Metro；`ui-hello` 直连 credential/status 验证链路。
+- 本机 twibot API 在 `127.0.0.1:12000`；App 默认宿主 `http://10.0.2.2:12000`（模拟器 NAT → Mac）。
+- 链路：模拟器 `10.0.2.2` → Mac `127.0.0.1:12000`（Mac 侧 `tcp-relay.py`）→ 容器
+  `172.16.74.11:12000`（容器侧 `tcp-relay.py`）→ twibot API。
+  ```bash
+  # 容器侧（本机）：
+  python3 scripts/tcp-relay.py 172.16.74.11 12000 127.0.0.1 12000 &
+  # Mac 侧（ssh 到 grant@172.16.74.1）：
+  python3 scripts/tcp-relay.py 127.0.0.1 12000 172.16.74.11 12000 &
+  ```
+- M0 验收：release 包内嵌 JS、自动启动（`App.tsx` 无条件 boot 默认宿主），ui-hello 直连
+  `/api/credential/status` 展示「宿主已连通 ✔」（截图 `docs/android-m0-shell.png`）。
 
 ## 验收纪律（继承 android-face）
 

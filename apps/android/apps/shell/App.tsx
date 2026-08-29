@@ -15,10 +15,10 @@ import type { ChatScreenEntry } from './src/plugins/chat-ui'
 import { theme } from './src/theme'
 
 /**
- * twibot face 开发拓扑：默认本机宿主（经 adb reverse 把 12000 转到模拟器）；
- * USB reverse 为离线兜底；亦可手填局域网/隧道地址（M1 连接拓扑定稿）。
+ * twibot face 开发拓扑：默认 10.0.2.2（模拟器 NAT → Mac 宿主 127.0.0.1:12000 →
+ * 容器 twibot API，经 Mac 侧 tcp-relay 转发）；127.0.0.1 为 adb reverse 场景兜底。
  */
-const DEFAULT_HOST = 'http://127.0.0.1:12000'
+const DEFAULT_HOST = 'http://10.0.2.2:12000'
 const USB_REVERSE_HOST = 'http://127.0.0.1:12000'
 
 // ---- slot 渲染器：订阅注册表，渲染当前胜出组件 ----
@@ -68,10 +68,11 @@ export default function App() {
     }
   }, [hostInput])
 
-  // dev 构建(走 Metro 的日常调试包)自动以默认宿主启动——设备验收零交互。
+  // 一切构建(dev/release)均自动以默认宿主启动——设备验收零交互；
+  // 失败留在选择页可手改地址重试。
   const autoStarted = React.useRef(false)
   React.useEffect(() => {
-    if (!__DEV__ || autoStarted.current) return
+    if (autoStarted.current) return
     autoStarted.current = true
     void onStart()
   }, [onStart])
@@ -86,14 +87,14 @@ export default function App() {
         style={pickerStyles.input}
         value={hostInput}
         onChangeText={setHostInput}
-        placeholder="http://127.0.0.1:12000"
+        placeholder="http://10.0.2.2:12000"
         placeholderTextColor={theme.colors.textSecondary}
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType="url"
       />
       <View style={pickerStyles.row}>
-        <Btn label="本机宿主" onPress={() => setHostInput(DEFAULT_HOST)} />
+        <Btn label="模拟器 NAT" onPress={() => setHostInput(DEFAULT_HOST)} />
         <Btn label="USB reverse" onPress={() => setHostInput(USB_REVERSE_HOST)} />
       </View>
       <TouchableOpacity

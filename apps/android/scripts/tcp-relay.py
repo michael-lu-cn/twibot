@@ -41,7 +41,8 @@ def main() -> None:
     srv.listen(16)
     print(f"[relay] {listen_host}:{listen_port} -> {target_host}:{target_port}", flush=True)
     while True:
-        conn, _ = srv.accept()
+        conn, addr = srv.accept()
+        print(f'[relay] conn from {addr[0]}:{addr[1]}', flush=True)
         try:
             tgt = socket.create_connection((target_host, target_port), timeout=10)
         except Exception:
