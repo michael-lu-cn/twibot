@@ -31,13 +31,13 @@ afterEach(() => {
 })
 
 describe('ui-router 装配', () => {
-  it('凭据已配置 → main/body = FeedScreen', async () => {
+  it('凭据已配置 → main/body = AppShell（含底部 tab）', async () => {
     stubFetch({ ok: true, data: { configured: true, keys: ['ct0'], source: 'file' }, source: 'db', elapsedMs: 0 })
     const shell = await boot('http://host')
     await settle()
     const winner = shell.slots.resolveSlot(MAIN_SLOT, MAIN_BODY_KEY)
     expect(winner).toBeTruthy()
-    expect((winner!.entry as { component: { name?: string } }).component.name).toContain('FeedScreen')
+    expect((winner!.entry as { component: { name?: string } }).component.name).toContain('AppShell')
   })
 
   it('未配置 → main/body = AuthScreen', async () => {

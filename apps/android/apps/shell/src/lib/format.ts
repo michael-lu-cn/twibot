@@ -11,9 +11,35 @@ export function fmtCount(n: number | null | undefined): string {
   return String(n)
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+/** X 时间格式：'Thu Aug 13 14:36:02 +0000 2026'（RFC 2822）。 */
+const X_TIME_RE = /^[A-Za-z]{3} ([A-Za-z]{3}) (\d{1,2}) (\d{2}):(\d{2}):(\d{2}) ([+-]\d{4}) (\d{4})$/
+
+/**
+ * 解析推文时间 → 毫秒时间戳。优先 Date.parse（ISO），X 的 RFC 2822 格式
+ * 手写解析（Hermes 的 Date.parse 不认该格式，会返回 NaN）。
+ */
+export function parseTweetTime(time: string): number {
+  const m = X_TIME_RE.exec(time.trim())
+  if (m) {
+    const month = MONTHS.indexOf(m[1])
+    if (month !== -1) {
+      const day = Number(m[2])
+      const hh = Number(m[3])
+      const mm = Number(m[4])
+      const ss = Number(m[5])
+      const tzSign = m[6][0] === '-' ? -1 : 1
+      const tzMin = tzSign * (Number(m[6].slice(1, 3)) * 60 + Number(m[6].slice(3, 5)))
+      const year = Number(m[7])
+      return Date.UTC(year, month, day, hh, mm, ss) - tzMin * 60_000
+    }
+  }
+  return Date.parse(time)
+}
+
 /** ISO/RFC2822 时间 → 相对时间 x s/m/h/d */
 export function fmtAgo(iso: string): string {
-  const t = Date.parse(iso)
+  const t = parseTweetTime(iso)
   if (!Number.isFinite(t)) return ''
   const s = Math.floor((Date.now() - t) / 1000)
   if (s < 60) return `${Math.max(s, 0)}s`
