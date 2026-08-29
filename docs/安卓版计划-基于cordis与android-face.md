@@ -212,7 +212,9 @@ twibot/
 - Node 档 56/56 通过（api-client/router 24 项新增）；`tsc --noEmit` 干净。
 - release 包模拟器实测：`ui-hello` 直连 `/api/credential/status` → **宿主已连通 ✔**（configured=true, source=file）。
 - 关键修正：Gradle 复用缓存发行版；hermesc shim；release cleartext patch；连接改用模拟器 NAT 10.0.2.2 + 双 relay（adb reverse 数据断裂弃用）。
-- 详见 `apps/android/docs/m0-report.md`。M1 起按 §8 继续：ui-auth → ui-feed → 用户主页。
+- 详见 `apps/android/docs/m0-report.md`。
+- M1（✅）：ui-router 三屏闭环（认证/推荐流/用户主页），推荐流 43 条真实数据上屏。
+- M2（✅）：AppShell 底部五 tab（主页/关注/分组/书签/设置）；关注(122人)+批量进度；分组组chips+改分组/取关；书签按月分组+月份chips跳转（设备验证）；修复 Hermes RFC2822 时间解析（parseTweetTime）。
 
 ---
 
