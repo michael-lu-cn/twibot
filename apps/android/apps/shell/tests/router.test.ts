@@ -58,3 +58,16 @@ describe('ui-router 装配', () => {
     expect((winner!.entry as { component: { name?: string } }).component.name).toContain('AuthScreen')
   })
 })
+describe('nav 服务与深链', () => {
+  it('configured 后 ctx.nav 可用，深链解析不抛（tab/用户/非法）', async () => {
+    stubFetch({ ok: true, data: { configured: true, keys: ['ct0'], source: 'file' }, source: 'db', elapsedMs: 0 })
+    const shell = await boot('http://host')
+    await settle()
+    const nav = shell.ctx.nav as { openDeepLink(url: string): void } | undefined
+    expect(nav).toBeTruthy()
+    expect(() => nav!.openDeepLink('twibot://bookmarks')).not.toThrow()
+    expect(() => nav!.openDeepLink('twibot://users/foo')).not.toThrow()
+    expect(() => nav!.openDeepLink('https://x.com/home')).not.toThrow()
+    expect(() => nav!.openDeepLink('garbage')).not.toThrow()
+  })
+})

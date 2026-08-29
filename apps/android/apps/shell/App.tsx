@@ -7,6 +7,7 @@
 import React, { useCallback, useReducer, useState, useEffect } from 'react'
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Linking } from 'react-native'
 import type { SlotCore } from '@twibot/face-priority-slot'
 
 import { MAIN_SLOT, boot, type Shell } from './src/index'
@@ -61,6 +62,16 @@ export default function App() {
       void updater?.checkUpdates()
 
       setShell(shell)
+      // M3 深链：冷启动初始 URL + 运行中 url 事件 → ctx.nav（twibot://bookmarks 等）。
+      const nav = shell.ctx.nav as
+        | { openDeepLink(url: string): void }
+        | undefined
+      if (nav) {
+        Linking.getInitialURL()
+          .then((url) => url && nav.openDeepLink(url))
+          .catch(() => {})
+        Linking.addEventListener('url', (e) => nav.openDeepLink(e.url))
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {

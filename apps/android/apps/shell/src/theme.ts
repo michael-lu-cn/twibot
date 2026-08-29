@@ -7,10 +7,10 @@ export const theme = {
     background: '#101014',
     surface: '#17171d',
     border: '#2b2b3a',
-    primary: '#9aa0ff',
+    primary: '#38bdf8', // twibot sky
     textPrimary: '#e5e7eb',
     textSecondary: '#9ca3af',
-    userBubbleBg: '#2b2bd6',
+    userBubbleBg: '#0284c7', // twibot sky-600
     userBubbleText: '#ffffff',
     assistantBubbleBg: '#1e1e28',
     assistantBubbleText: '#cfd3ff',

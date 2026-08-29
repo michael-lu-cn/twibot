@@ -1,15 +1,18 @@
 /**
- * 插件：ui-router（组合路由 + App 壳）
- * - 未配置 cookie → 认证设置全屏；已配置 → AppShell（底部 tab 五屏）。
- * - 书签/关注/分组/主页内点击作者 → UserScreen 全屏覆层；返回回到原 tab。
+ * 插件：ui-router（组合路由 + App 壳 + nav 服务）
+ * - 未配置 cookie → 认证设置全屏；已配置 → AppShell（底部 tab 五屏）常驻。
+ * - AppShell 内部导航由 navStore 驱动：tab 切换 / 用户主页覆层 / 返回原 tab。
+ * - provide `nav` 服务（壳可经 ctx.nav 处理深链 twibot://bookmarks|users/<handle>）。
  * - 切换 = 注销旧 slot 条目 + 注册新条目（注册即效果，卸载即回滚）。
  */
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useSyncExternalStore } from 'react'
 import { StyleSheet, View } from 'react-native'
 import type { CordisPlugin } from '@twibot/face-cordis-kernel'
 import type { SlotCore } from '@twibot/face-priority-slot'
+import { createStore } from 'zustand/vanilla'
 
 import { createApiClient, isOk } from '../lib/api-client'
+import { deepLinkToPath, parseRoutePath, type Route } from '../lib/router'
 import { MAIN_BODY_KEY, MAIN_SLOT } from '../types'
 import { TabBar, type AppTab } from '../components/tab-bar'
 import { createAuthScreen } from '../screens/auth'
@@ -24,61 +27,21 @@ export interface ScreenEntry {
   component: React.ComponentType
 }
 
-/** App 壳：底部 tab 容器，内容区按 tab 渲染对应屏。 */
-function createAppShell(props: {
-  api: ReturnType<typeof createApiClient>
-  onOpenUser: (handle: string) => void
-  initialTab: AppTab
-  onTabChange: (t: AppTab) => void
-}) {
-  return function AppShell() {
-    const { api, onOpenUser, initialTab, onTabChange } = props
-    const [tab, setTab] = useState<AppTab>(initialTab)
-    // 注意：必须经 JSX 渲染组件（<C />），直接调用组件函数会在 hooks 框架外执行 → 崩。
-    const content = useMemo(() => {
-      switch (tab) {
-        case 'home': {
-          const C = createFeedScreen({ api, onOpenUser })
-          return <C />
-        }
-        case 'following': {
-          const C = createFollowingScreen({ api, onOpenUser })
-          return <C />
-        }
-        case 'groups': {
-          const C = createGroupsScreen({ api, onOpenUser })
-          return <C />
-        }
-        case 'bookmarks': {
-          const C = createBookmarksScreen({ api, onOpenUser })
-          return <C />
-        }
-        case 'settings': {
-          const C = createAuthScreen({ api, onAuthChanged: () => setTab('home') })
-          return <C />
-        }
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [tab])
-    return (
-      <View style={styles.shell}>
-        <View style={styles.body}>{content}</View>
-        <TabBar
-          active={tab}
-          onSelect={(t) => {
-            onTabChange(t)
-            setTab(t)
-          }}
-        />
-      </View>
-    )
-  }
+/** nav 服务面（壳与外部联动用）。 */
+export interface NavService {
+  openTab(tab: AppTab): void
+  openUser(handle: string): void
+  back(): void
+  /** 深链 → 路由动作（twibot://bookmarks、twibot://users/foo）。 */
+  openDeepLink(url: string): void
 }
 
-const styles = StyleSheet.create({
-  shell: { flex: 1 },
-  body: { flex: 1 },
-})
+interface NavState {
+  tab: AppTab
+  lastTab: AppTab
+  /** 非空 = 用户主页覆层全屏。 */
+  userHandle: string | null
+}
 
 export function routerPlugin(slots: SlotCore<unknown>): CordisPlugin {
   return {
@@ -87,38 +50,103 @@ export function routerPlugin(slots: SlotCore<unknown>): CordisPlugin {
       const baseUrl = String((config as { baseUrl?: string } | undefined)?.baseUrl ?? 'http://10.0.2.2:12000')
       const api = createApiClient(baseUrl)
       let dispose: (() => void) | null = null
-      let lastTab: 'home' | 'following' | 'groups' | 'bookmarks' | 'settings' = 'home'
+
+      // ---- navStore：AppShell 内部导航状态（模块级，AppShell 与 nav 共享）----
+      const navStore = createStore<NavState>()(() => ({ tab: 'home', lastTab: 'home', userHandle: null }))
+
+      const nav: NavService = {
+        openTab(tab) {
+          navStore.setState({ tab, lastTab: tab, userHandle: null })
+        },
+        openUser(handle) {
+          navStore.setState((s) => ({ ...s, lastTab: s.tab, userHandle: handle }))
+        },
+        back() {
+          navStore.setState((s) => ({ ...s, userHandle: null, tab: s.lastTab }))
+        },
+        openDeepLink(url) {
+          const path = deepLinkToPath(url)
+          if (!path) return
+          const route: Route = parseRoutePath(path)
+          if (route.userHandle) nav.openUser(route.userHandle)
+          else nav.openTab(route.tab === 'auth' ? 'settings' : route.tab)
+        },
+      }
+
+      // ---- AppShell：常驻容器，内部状态全走 navStore ----
+      const makeAppShell = () =>
+        function AppShell() {
+          const state = useSyncExternalStore(
+            (cb) => navStore.subscribe(cb),
+            () => navStore.getState(),
+          )
+          const { tab, userHandle } = state
+          // hooks 必须在任何条件早返回之前：useMemo 恒调用（覆层时仅构造元素，不渲染）。
+          const content = useMemo(() => {
+            switch (tab) {
+              case 'home': {
+                const C = createFeedScreen({ api, onOpenUser: (h) => nav.openUser(h) })
+                return <C />
+              }
+              case 'following': {
+                const C = createFollowingScreen({ api, onOpenUser: (h) => nav.openUser(h) })
+                return <C />
+              }
+              case 'groups': {
+                const C = createGroupsScreen({ api, onOpenUser: (h) => nav.openUser(h) })
+                return <C />
+              }
+              case 'bookmarks': {
+                const C = createBookmarksScreen({ api, onOpenUser: (h) => nav.openUser(h) })
+                return <C />
+              }
+              case 'settings': {
+                const C = createAuthScreen({ api, onAuthChanged: () => nav.openTab('home') })
+                return <C />
+              }
+            }
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+          }, [tab, userHandle])
+
+          // 用户主页覆层（全屏，无 tab）
+          if (userHandle) {
+            const C = createUserScreen({
+              handle: userHandle,
+              api,
+              onBack: () => nav.back(),
+              onOpenUser: (h) => nav.openUser(h),
+            })
+            return <C />
+          }
+
+          return (
+            <View style={styles.shell}>
+              <View style={styles.body}>{content}</View>
+              <TabBar active={tab} onSelect={(t) => nav.openTab(t)} />
+            </View>
+          )
+        }
+
+      const AppShell = makeAppShell()
 
       const mount = (screen: React.ComponentType) => {
         dispose?.()
         dispose = slots.register(MAIN_SLOT, { component: screen } satisfies ScreenEntry, { key: MAIN_BODY_KEY })
       }
 
-      /** 用户主页：从 AppShell 进入；返回后按原 tab 重装配。 */
-      const openUser = (handle: string) => {
-        mount(createUserScreen({ handle, api, onBack: () => void resolveInitial(), onOpenUser: openUser }))
-      }
-
-      /** 初始装配：凭据已配置 → AppShell（记住上次 tab）；否则 → 认证设置全屏。 */
+      /** 初始装配：凭据已配置 → AppShell；否则 → 认证设置全屏。 */
       const resolveInitial = () => {
         void (async () => {
           const r = await api.credentialStatus()
           if (isOk(r) && r.data.configured) {
-            mount(
-              createAppShell({
-                api,
-                onOpenUser: openUser,
-                initialTab: lastTab,
-                onTabChange: (t) => {
-                  lastTab = t
-                },
-              }),
-            )
+            mount(AppShell)
           } else {
             mount(createAuthScreen({ api, onAuthChanged: () => void resolveInitial() }))
           }
         })()
       }
+
+      ctx.provide('nav', nav)
 
       ctx.effect(
         () => {
@@ -133,3 +161,8 @@ export function routerPlugin(slots: SlotCore<unknown>): CordisPlugin {
     },
   }
 }
+
+const styles = StyleSheet.create({
+  shell: { flex: 1 },
+  body: { flex: 1 },
+})
