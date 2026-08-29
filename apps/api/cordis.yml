@@ -30,6 +30,8 @@
   config:
     limit: 20
     scrolls: 5
+    # 书签同步滚动轮数（拉到无新推文自动停，越大越全；0 表示用默认 30）
+    bookmarkScrolls: 30
 
 - id: sync-following
   name: '@twibot/sync-following'

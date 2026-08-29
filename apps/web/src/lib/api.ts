@@ -92,10 +92,12 @@ export const api = {
       method: "POST",
     }),
 
-  bookmarks: (limit = 100) =>
+  /** 书签：拉取本地全部（上限 5000），前端按月分组展示。 */
+  bookmarks: (limit = 5000) =>
     request<{ tweets: Tweet[]; syncedAt: number | null }>(`/api/bookmarks?limit=${limit}`),
 
-  syncBookmarks: (limit = 100) =>
+  /** 同步书签：一次拉取尽量完整（上限 2000），后台滚动到无新推文自动停。 */
+  syncBookmarks: (limit = 2000) =>
     request<{ added: number; tweets: Tweet[]; syncedAt: number }>(`/api/bookmarks/sync?limit=${limit}`, {
       method: "POST",
     }),

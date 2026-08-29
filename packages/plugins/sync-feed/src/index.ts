@@ -185,6 +185,8 @@ export interface Config {
   limit: number
   /** 滚动轮数。 */
   scrolls: number
+  /** 书签同步专用滚动轮数（X 书签页每次滚动约 20 条；默认 30 轮 ≈ 600 条，拉到尽头自动停）。 */
+  bookmarkScrolls?: number
   /** 主页 URL（本地调试/mock 可覆盖；默认 {baseUrl}/home）。 */
   homeUrl?: string
   /** X 基址（本地调试/mock 可覆盖；默认 https://x.com）。 */
@@ -206,7 +208,13 @@ export function apply(ctx: Context, config: Config): void {
    */
   async function fetchTimeline(
     targetUrl: string,
-    opts: { match: (u: string) => boolean; extract: (j: any) => Array<{ entries?: GraphqlTweetEntry[] }>; label: string },
+    opts: {
+      match: (u: string) => boolean
+      extract: (j: any) => Array<{ entries?: GraphqlTweetEntry[] }>
+      label: string
+      /** 滚动轮数覆盖（默认 config.scrolls）。 */
+      scrolls?: number
+    },
     limit: number,
   ): Promise<Tweet[]> {
     const s = await session.launch()
@@ -260,7 +268,8 @@ export function apply(ctx: Context, config: Config): void {
       }
 
       // 滚动加载更多（触发 timeline cursor 翻页）
-      for (let i = 0; i < (config.scrolls ?? 5) && tweets.length < limit; i++) {
+      const scrolls = opts.scrolls ?? config.scrolls ?? 5
+      for (let i = 0; i < scrolls && tweets.length < limit; i++) {
         const before = tweets.length
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
         await page.waitForTimeout(SCROLL_WAIT_MS)
@@ -371,12 +380,14 @@ export function apply(ctx: Context, config: Config): void {
         return v2?.timeline?.instructions ?? v2?.instructions ?? []
       },
       label: '书签',
+      // 书签通常量大：默认 30 轮滚动，拉到无新推文自动停，尽量一次同步完整
+      scrolls: config.bookmarkScrolls ?? 30,
     }, limit)
   }
 
   api.post('/api/bookmarks/sync', async (c: any) => {
     const t0 = Date.now()
-    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 50) || 50, 1), 200)
+    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 200) || 200, 1), 2000)
     try {
       const tweets = await fetchBookmarks(limit)
       persistTweets(tweets)
@@ -390,7 +401,7 @@ export function apply(ctx: Context, config: Config): void {
   })
 
   api.get('/api/bookmarks', (c: any) => {
-    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 100) || 100, 1), 500)
+    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 500) || 500, 1), 5000)
     const rows = store.listBookmarks(limit)
     if (rows.length === 0) {
       return c.json({ ok: false, error: { code: ErrorCodes.NOT_SYNCED, message: '本地还没有书签数据，请先同步' } }, 404)

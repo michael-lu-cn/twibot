@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Tags, Users } from "lucide-react"
+import { ExternalLink, Tags, Users } from "lucide-react"
 import { api, isOk, ERROR_HINTS, type GroupOption, type SmartGroup } from "@/lib/api"
 import { imgProxy } from "@/lib/format"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -134,6 +134,18 @@ export function GroupsView({ onOpenUser }: { onOpenUser: (handle: string) => voi
                     onChanged={() => void load()}
                   />
                 </div>
+                {/* 在 X 打开原主页（不触发行内进入应用内主页） */}
+                <a
+                  href={`https://x.com/${u.handle}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`在 X 打开 @${u.handle}`}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-sky-500"
+                >
+                  <ExternalLink className="size-4" />
+                </a>
               </div>
             ))}
             <div className="flex items-center justify-center gap-1.5 px-4 py-4 text-[13px] text-muted-foreground/50">

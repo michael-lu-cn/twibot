@@ -1,4 +1,4 @@
-import { Eye, Heart, MessageCircle, Repeat2 } from "lucide-react"
+import { ExternalLink, Eye, Heart, MessageCircle, Repeat2 } from "lucide-react"
 import type { Tweet } from "@/lib/api"
 import { displayUrl, fmtAgo, fmtCount, imgProxy, initial, splitLinks } from "@/lib/format"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -30,7 +30,7 @@ export function TweetCard({
       </button>
 
       <div className="min-w-0 flex-1">
-        {/* 作者行（点击进主页） */}
+        {/* 作者行（点击进主页；右侧外链图标打开 X 原主页） */}
         <div className="flex items-baseline gap-1 text-[15px]">
           <button
             type="button"
@@ -44,6 +44,18 @@ export function TweetCard({
             @{tweet.authorHandle}
           </button>
           {tweet.time ? <span className="shrink-0 text-muted-foreground">· {fmtAgo(tweet.time)}</span> : null}
+          {tweet.authorHandle ? (
+            <a
+              href={`https://x.com/${tweet.authorHandle}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`在 X 打开 @${tweet.authorHandle}`}
+              aria-label={`在 X 打开 @${tweet.authorHandle}`}
+              className="ml-auto shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-sky-500"
+            >
+              <ExternalLink className="size-3.5" />
+            </a>
+          ) : null}
         </div>
 
         {/* 正文（链接可点击） */}
@@ -65,15 +77,29 @@ export function TweetCard({
           )}
         </p>
 
-        {/* 互动行 */}
+        {/* 互动行（右侧外链图标打开原推文） */}
         <div className="mt-2 flex max-w-md items-center justify-between text-[13px] text-muted-foreground">
-          <Action icon={<MessageCircle className="size-4" />} count={fmtCount(m?.replies)} />
-          <Action icon={<Repeat2 className="size-4" />} count={fmtCount(m?.reposts)} />
-          <Action icon={<Heart className="size-4" />} count={fmtCount(m?.likes)} hover="hover:text-red-500" />
-          <span className="flex items-center gap-1">
-            <Eye className="size-4" />
-            {fmtCount(m?.views) || "—"}
-          </span>
+          <div className="flex items-center gap-3">
+            <Action icon={<MessageCircle className="size-4" />} count={fmtCount(m?.replies)} />
+            <Action icon={<Repeat2 className="size-4" />} count={fmtCount(m?.reposts)} />
+            <Action icon={<Heart className="size-4" />} count={fmtCount(m?.likes)} hover="hover:text-red-500" />
+            <span className="flex items-center gap-1">
+              <Eye className="size-4" />
+              {fmtCount(m?.views) || "—"}
+            </span>
+          </div>
+          {tweet.url ? (
+            <a
+              href={tweet.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="在 X 打开原推文"
+              aria-label="在 X 打开原推文"
+              className="shrink-0 rounded-full p-1 transition-colors hover:bg-accent hover:text-sky-500"
+            >
+              <ExternalLink className="size-4" />
+            </a>
+          ) : null}
         </div>
       </div>
     </article>

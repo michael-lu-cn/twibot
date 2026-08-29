@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { ArrowLeft, RefreshCw } from "lucide-react"
+import { ArrowLeft, ExternalLink, RefreshCw } from "lucide-react"
 import { api, isOk, ERROR_HINTS, type ApiResult, type Tweet, type UserProfile } from "@/lib/api"
 import { imgProxy } from "@/lib/format"
 import { Button } from "@/components/ui/button"
@@ -73,10 +73,22 @@ export function UserProfileView({
           <h1 className="truncate text-xl font-bold leading-tight">{user?.name || `@${handle}`}</h1>
           <p className="truncate text-[13px] text-muted-foreground">@{handle} · {tweets.length} 条已同步</p>
         </div>
-        <Button size="sm" onClick={sync} disabled={syncing} className="rounded-full">
-          <RefreshCw className={syncing ? "animate-spin" : ""} />
-          {syncing ? "同步中" : "同步推文"}
-        </Button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <a
+            href={`https://x.com/${handle}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`在 X 打开 @${handle}`}
+            title={`在 X 打开 @${handle}`}
+            className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent/70 hover:text-sky-500"
+          >
+            <ExternalLink className="size-5" />
+          </a>
+          <Button size="sm" onClick={sync} disabled={syncing} className="rounded-full">
+            <RefreshCw className={syncing ? "animate-spin" : ""} />
+            {syncing ? "同步中" : "同步推文"}
+          </Button>
+        </div>
       </header>
 
       {msg ? (
