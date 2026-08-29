@@ -19,7 +19,8 @@
     "@twibot/core-store": "workspace:^",
     "@twibot/core-session": "workspace:^",
     "@twibot/sync-feed": "workspace:^",
-    "@twibot/sync-following": "workspace:^"
+    "@twibot/sync-following": "workspace:^",
+    "@twibot/smart-groups": "workspace:^"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

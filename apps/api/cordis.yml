@@ -38,6 +38,10 @@
     limit: 200
     scrolls: 8
 
+- id: smart-groups
+  name: '@twibot/smart-groups'
+  inject: [store, api]
+
 - id: api-server
   name: '@twibot/api-server'
   inject: [hello]

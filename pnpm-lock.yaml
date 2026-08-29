@@ -37,6 +37,9 @@ importers:
       '@twibot/core-store':
         specifier: workspace:^
         version: link:../../packages/plugins/core-store
+      '@twibot/smart-groups':
+        specifier: workspace:^
+        version: link:../../packages/plugins/smart-groups
       '@twibot/sync-feed':
         specifier: workspace:^
         version: link:../../packages/plugins/sync-feed
@@ -213,6 +216,12 @@ importers:
       '@types/better-sqlite3':
         specifier: ^7.6.0
         version: 7.6.13
+
+  packages/plugins/smart-groups:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../cordis
 
   packages/plugins/sync-feed:
     dependencies:

@@ -112,6 +112,8 @@ export const api = {
     request<{ taskId: string }>(`/api/batch/user-tweets/sync?perUser=${perUser}`, { method: "POST" }),
 
   batchTask: (taskId: string) => request<BatchTask>(`/api/batch/user-tweets/task/${taskId}`),
+
+  smartGroups: () => request<{ groups: SmartGroup[]; otherCount: number; total: number; generatedAt: number }>("/api/groups/auto"),
 }
 
 export interface UserProfile {
@@ -132,4 +134,21 @@ export interface BatchTask {
   error?: string
   createdAt: number
   finishedAt?: number
+}
+
+export interface SmartGroupMember {
+  userId: string
+  handle: string
+  name: string
+  avatarUrl: string
+  bio: string
+  tweetCount: number
+  recentSample: string
+  matched: string[]
+}
+
+export interface SmartGroup {
+  id: string
+  name: string
+  users: SmartGroupMember[]
 }

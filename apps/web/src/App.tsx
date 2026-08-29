@@ -3,6 +3,7 @@ import { api, isOk, type CredentialStatus } from "@/lib/api"
 import { Sidebar, type TabKey } from "@/components/Sidebar"
 import { FeedView } from "@/components/FeedView"
 import { FollowingView } from "@/components/FollowingView"
+import { GroupsView } from "@/components/GroupsView"
 import { UserProfileView } from "@/components/UserProfileView"
 import { CookieSetup } from "@/components/CookieSetup"
 
@@ -30,6 +31,8 @@ export default function App() {
     main = <CookieSetup onSaved={refreshStatus} />
   } else if (tab === "following") {
     main = <FollowingView onOpenUser={setUserHandle} />
+  } else if (tab === "groups") {
+    main = <GroupsView onOpenUser={setUserHandle} />
   } else {
     main = <FeedView onOpenUser={setUserHandle} />
   }
