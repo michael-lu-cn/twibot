@@ -51,49 +51,49 @@ interface GroupDef {
 const GROUP_DEFS: GroupDef[] = [
   {
     id: 'ai',
-    name: 'AI / 机器学习',
+    name: 'AI',
     en: ['llm', 'gpt', 'neural', 'machine learning', 'deep learning', 'agi', 'artificial intelligence', 'diffusion', 'multimodal', 'rag'],
     zh: ['人工智能', '大模型', '机器学习', '深度学习', '智能体', '提示词'],
   },
   {
     id: 'dev',
-    name: '开发 / 开源',
+    name: '开发',
     en: ['developer', 'programming', 'software engineer', 'open source', 'opensource', 'github', 'rust', 'golang', 'typescript', 'javascript', 'python', 'kubernetes', 'linux', 'compiler', 'programmer', 'startup engineer'],
     zh: ['开发', '程序员', '开源', '工程师', '代码', '编程'],
   },
   {
     id: 'startup',
-    name: '创业 / 风险投资',
+    name: '创业',
     en: ['startup', 'founder', 'venture', 'entrepreneur', 'investor', 'yzc', 'startups'],
     zh: ['创业', '创始人', '融资', '投资人', '风险投资'],
   },
   {
     id: 'finance',
-    name: '财经 / 市场',
+    name: '财经',
     en: ['finance', 'stock market', 'trading', 'investing', 'financial', 'equities', 'macroeconomics'],
     zh: ['财经', '股市', '金融', '投资', '宏观经济', '证券'],
   },
   {
     id: 'crypto',
-    name: 'Web3 / 加密',
+    name: '加密',
     en: ['bitcoin', 'ethereum', 'web3', 'blockchain', 'solana', 'defi', 'nft', 'crypto'],
     zh: ['比特币', '以太坊', '区块链', '加密', '币圈', '数字资产'],
   },
   {
     id: 'design',
-    name: '设计 / 产品',
+    name: '设计',
     en: ['designer', 'product design', 'figma', 'ux', 'ui designer', 'typography'],
     zh: ['设计', '产品经理', '交互设计', '用户体验'],
   },
   {
     id: 'media',
-    name: '媒体 / 新闻',
+    name: '媒体',
     en: ['journalist', 'reporter', 'newsletter', 'news media', 'editor', 'columnist', 'tech media'],
     zh: ['记者', '媒体', '新闻', '主编', '报道', '撰稿人'],
   },
   {
     id: 'academic',
-    name: '学术 / 研究',
+    name: '学术',
     en: ['researcher', 'phd', 'professor', 'scientist', 'research', 'paper', 'lab'],
     zh: ['教授', '博士', '研究员', '科研', '论文', '实验室'],
   },
@@ -186,7 +186,7 @@ export function apply(ctx: Context, config: Config): void {
     const overrides = store.getGroupOverrides() as Map<string, string>
 
     const groups = new Map<string, GroupInfo>(GROUP_DEFS.map((g) => [g.id, { id: g.id, name: g.name, users: [] }]))
-    groups.set('chinese', { id: 'chinese', name: '中文内容', users: [] })
+    groups.set('chinese', { id: 'chinese', name: '中文', users: [] })
     groups.set('other', { id: 'other', name: '未分组', users: [] })
 
     for (const u of users) {
@@ -219,7 +219,7 @@ export function apply(ctx: Context, config: Config): void {
     // 可选分组（改分组按钮选项）：主题组 + 中文内容 + 未分组
     const options: Array<{ id: string; name: string }> = [
       ...GROUP_DEFS.map((g) => ({ id: g.id, name: g.name })),
-      { id: 'chinese', name: '中文内容' },
+      { id: 'chinese', name: '中文' },
       { id: 'other', name: '未分组' },
     ]
 
