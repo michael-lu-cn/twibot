@@ -206,6 +206,16 @@ twibot/
 
 ---
 
+## 附：M0 实施结果（2026-08-29 ✅）
+
+- 壳工程落地：`apps/android`（改名 @twibot/face-*、应用 id org.twibot.face、npm workspace 独立）。
+- Node 档 56/56 通过（api-client/router 24 项新增）；`tsc --noEmit` 干净。
+- release 包模拟器实测：`ui-hello` 直连 `/api/credential/status` → **宿主已连通 ✔**（configured=true, source=file）。
+- 关键修正：Gradle 复用缓存发行版；hermesc shim；release cleartext patch；连接改用模拟器 NAT 10.0.2.2 + 双 relay（adb reverse 数据断裂弃用）。
+- 详见 `apps/android/docs/m0-report.md`。M1 起按 §8 继续：ui-auth → ui-feed → 用户主页。
+
+---
+
 ## 附：首轮实现建议（评审通过后的第一动作）
 
 1. 复制 android-face 到 `apps/android`，改名工作区，跑通空壳 debug 包；
