@@ -2,7 +2,12 @@ packages:
   - "packages/*"
   - "packages/plugins/*"
   - "apps/*"
-  - "!apps/android"
+  - "apps/android/packages/*"
+  - "apps/android/apps/*"
 allowBuilds:
   better-sqlite3: true
+  # bunyan 的可选原生依赖，仅 macOS/DTrace 用得上。pnpm 11 会把未声明的
+  # postinstall 视为失败（ERR_PNPM_IGNORED_BUILDS），故必须显式 false。
+  # 注：这一行是 pnpm 自动写入的占位提示，人工改为布尔值即可。
+  dtrace-provider: false
   esbuild: true
