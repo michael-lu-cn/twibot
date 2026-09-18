@@ -4,15 +4,11 @@
   "type": "module",
   "description": "Cordis × React Native 插件化 Android 计划 2.0 的 MVP 工作区（实验 0–4）",
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22.19"
   },
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
-    "test": "npm test --workspaces --if-present"
+    "build": "pnpm --filter \"@twibot/face-*\" build",
+    "test": "pnpm --filter \"@twibot/face-*\" test"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",

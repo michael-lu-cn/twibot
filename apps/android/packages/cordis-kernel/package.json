@@ -10,8 +10,8 @@
     ".": "./dist/cordis.kernel.js"
   },
   "scripts": {
-    "build": "tsup --config tsup.config.ts",
-    "test": "vitest run"
+    "build": "../../node_modules/.bin/tsup --config tsup.config.ts",
+    "test": "../../node_modules/.bin/vitest run"
   },
   "dependencies": {
     "zustand": "^5.0.15"
