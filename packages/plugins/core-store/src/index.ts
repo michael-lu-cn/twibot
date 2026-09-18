@@ -8,8 +8,14 @@ import { dirname, join } from 'node:path'
 // 策略：每个数据流（某人的关注列表 / 某人的推文 / 某推文的评论）维护一条
 // 单调递增的时间轴，position 越大越新。
 // - 首次抓取：最新条目锚定 FIRST_POSITION（100000），越往过去越小（递减）。
-// - 增量抓取：批内已知条目之前（更新）→ 最大 +1 递增；之后（更旧）→ 最小 -1 递减；
+// - 增量抓取：批内已知条目之前（更新）→ 自「最大 + 批内条数」起递减（最新在最前）；
+//   之后（更旧）→ 最小 -1 递减；
 //   夹在中间（中断遗漏补抓）→ 相邻已知位置间挤压，空位不足触发整条流重编号（resolvePositions）。
+//
+// 铁律：`orderedKeys` 一律是「新 → 旧」，而读取端是 `ORDER BY position DESC`，
+// 因此**任何分支分配 position 都必须随下标递减**（第一个元素拿最高位）。
+// 曾因「已知条目之前」与「整批全新」两个分支误用递增（next++），导致前插块的
+// 显示顺序被整体反转（一次同步前插 N 条 = 这 N 条倒序），已修正。
 
 export const FIRST_POSITION = 100_000
 
@@ -36,12 +42,15 @@ export function planPositions(orderedKeys: string[], known: Map<string, number>)
     if (p < minPos) minPos = p
   }
   if (firstKnown === -1) {
-    let pos = maxPos + 1
-    for (const k of orderedKeys) out.set(k, pos++)
+    // 整批都不在已知集合：默认这批比已知的全部更新，占用 maxPos 之上连续区间。
+    // 自高到低分配，保证 DESC 读取时批内顺序与 orderedKeys（新→旧）一致。
+    let pos = maxPos + orderedKeys.length
+    for (const k of orderedKeys) out.set(k, pos--)
     return out
   }
-  let next = maxPos + 1
-  for (let i = 0; i < firstKnown; i++) out.set(orderedKeys[i], next++)
+  // 已知条目之前的块（更新）：同样自高到低——最高位给 orderedKeys[0]。
+  let next = maxPos + firstKnown
+  for (let i = 0; i < firstKnown; i++) out.set(orderedKeys[i], next--)
   let prev = minPos - 1
   for (let i = lastKnown + 1; i < orderedKeys.length; i++) out.set(orderedKeys[i], prev--)
   // 中间空隙：相邻已知之间挤压（首段由顶部逻辑处理，跳过）

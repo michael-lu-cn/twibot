@@ -1,7 +1,7 @@
 /**
  * 关注列表屏（对齐 web FollowingView）：列表 + 同步 + 批量同步推文进度。
  */
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -15,7 +15,8 @@ import {
 import type { ApiClient, BatchTask, FollowingUser } from '../lib/api-client'
 import { ERROR_HINTS, isOk } from '../lib/api-client'
 import { initial } from '../lib/format'
-import { theme } from '../theme'
+import { spacing as s, type Theme } from '../theme'
+import { useTheme } from '../theme-context'
 
 export interface FollowingScreenProps {
   api: ApiClient
@@ -25,6 +26,8 @@ export interface FollowingScreenProps {
 export function createFollowingScreen(props: FollowingScreenProps) {
   return function FollowingScreen() {
     const { api, onOpenUser } = props
+    const { theme } = useTheme()
+    const styles = useMemo(() => makeStyles(theme), [theme])
     const [users, setUsers] = useState<FollowingUser[]>([])
     const [handle, setHandle] = useState<string | null>(null)
     const [loaded, setLoaded] = useState(false)
@@ -182,8 +185,7 @@ export function createFollowingScreen(props: FollowingScreenProps) {
   }
 }
 
-const s = theme.spacing
-const styles = StyleSheet.create({
+const makeStyles = (theme: Theme) => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   header: {
     flexDirection: 'row',

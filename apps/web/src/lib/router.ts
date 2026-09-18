@@ -16,6 +16,7 @@ export function parseHash(hash = window.location.hash): Route {
     case "groups":
     case "bookmarks":
     case "auth":
+    case "settings":
       return { tab: seg }
     case "users": {
       const handle = rest[0] ? decodeURIComponent(rest[0]) : undefined

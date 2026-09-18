@@ -1,11 +1,12 @@
 /**
  * 用户行操作（对齐 web MemberActions）：改分组（弹层） + 取关。
  */
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { ApiClient, GroupOption } from '../lib/api-client'
 import { isOk } from '../lib/api-client'
-import { theme } from '../theme'
+import { spacing as s, type Theme } from '../theme'
+import { useTheme } from '../theme-context'
 
 export function MemberActions({
   api,
@@ -22,6 +23,8 @@ export function MemberActions({
   options: GroupOption[]
   onChanged: () => void
 }) {
+  const { theme } = useTheme()
+  const styles = useMemo(() => makeStyles(theme), [theme])
   const [open, setOpen] = useState(false)
 
   const choose = async (groupKey: string) => {
@@ -69,8 +72,7 @@ export function MemberActions({
   )
 }
 
-const s = theme.spacing
-const styles = StyleSheet.create({
+const makeStyles = (theme: Theme) => StyleSheet.create({
   btn: {
     alignSelf: 'flex-start',
     backgroundColor: theme.colors.surface,

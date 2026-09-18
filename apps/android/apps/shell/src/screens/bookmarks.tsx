@@ -7,7 +7,8 @@ import type { ApiClient, Tweet } from '../lib/api-client'
 import { ERROR_HINTS, isOk } from '../lib/api-client'
 import { groupByMonth } from '../lib/group'
 import { TweetCard } from '../components/tweet-card'
-import { theme } from '../theme'
+import { spacing as s, type Theme } from '../theme'
+import { useTheme } from '../theme-context'
 
 export interface BookmarksScreenProps {
   api: ApiClient
@@ -17,6 +18,8 @@ export interface BookmarksScreenProps {
 export function createBookmarksScreen(props: BookmarksScreenProps) {
   return function BookmarksScreen() {
     const { api, onOpenUser } = props
+    const { theme } = useTheme()
+    const styles = useMemo(() => makeStyles(theme), [theme])
     const [tweets, setTweets] = useState<Tweet[]>([])
     const [loaded, setLoaded] = useState(false)
     const [syncing, setSyncing] = useState(false)
@@ -146,8 +149,7 @@ export function createBookmarksScreen(props: BookmarksScreenProps) {
   }
 }
 
-const s = theme.spacing
-const styles = StyleSheet.create({
+const makeStyles = (theme: Theme) => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   header: {
     flexDirection: 'row',

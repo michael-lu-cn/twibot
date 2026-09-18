@@ -8,6 +8,7 @@ import { GroupsView } from "@/components/GroupsView"
 import { BookmarksView } from "@/components/BookmarksView"
 import { UserProfileView } from "@/components/UserProfileView"
 import { CookieSetup } from "@/components/CookieSetup"
+import { SettingsView } from "@/components/SettingsView"
 
 /** 应用外壳：Twitter 风格三栏（侧边导航 + 主列），导航与 URL hash 双向同步。 */
 export default function App() {
@@ -60,6 +61,8 @@ export default function App() {
     main = <GroupsView onOpenUser={goUser} />
   } else if (tab === "bookmarks") {
     main = <BookmarksView onOpenUser={goUser} />
+  } else if (tab === "settings") {
+    main = <SettingsView status={status} onOpenAuth={() => goTab("auth")} />
   } else {
     main = <FeedView onOpenUser={goUser} />
   }

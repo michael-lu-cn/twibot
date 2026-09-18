@@ -4,6 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>twibot</title>
+    <script>
+      // 首帧前应用主题，避免深浅色闪烁；规则与 src/lib/theme.ts 保持一致
+      // （key = twibot.theme；无值/非法值按「跟随系统」处理）
+      ;(function () {
+        try {
+          var mode = window.localStorage.getItem("twibot.theme")
+          var dark =
+            mode === "dark" ||
+            (mode !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches)
+          document.documentElement.classList.toggle("dark", dark)
+          document.documentElement.style.colorScheme = dark ? "dark" : "light"
+        } catch (e) {
+          /* 隐私模式下读不到 localStorage：保持浅色，由 React 接管 */
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

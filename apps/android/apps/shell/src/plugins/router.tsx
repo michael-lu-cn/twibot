@@ -21,6 +21,7 @@ import { createFollowingScreen } from '../screens/following'
 import { createGroupsScreen } from '../screens/groups'
 import { createBookmarksScreen } from '../screens/bookmarks'
 import { createUserScreen } from '../screens/user'
+import { createSettingsScreen } from '../screens/settings'
 
 /** 本插件向 slot 注册的载荷。 */
 export interface ScreenEntry {
@@ -31,6 +32,10 @@ export interface ScreenEntry {
 export interface NavService {
   openTab(tab: AppTab): void
   openUser(handle: string): void
+  /** 打开认证屏覆层（设置页「重新粘贴 Cookie」）。 */
+  openAuth(): void
+  /** 关闭认证屏覆层，回到原内容。 */
+  closeAuth(): void
   back(): void
   /** 深链 → 路由动作（twibot://bookmarks、twibot://users/foo）。 */
   openDeepLink(url: string): void
@@ -41,6 +46,8 @@ interface NavState {
   lastTab: AppTab
   /** 非空 = 用户主页覆层全屏。 */
   userHandle: string | null
+  /** true = 认证屏覆层全屏（从设置页进入）。 */
+  authOpen: boolean
 }
 
 export function routerPlugin(slots: SlotCore<unknown>): CordisPlugin {
@@ -52,14 +59,25 @@ export function routerPlugin(slots: SlotCore<unknown>): CordisPlugin {
       let dispose: (() => void) | null = null
 
       // ---- navStore：AppShell 内部导航状态（模块级，AppShell 与 nav 共享）----
-      const navStore = createStore<NavState>()(() => ({ tab: 'home', lastTab: 'home', userHandle: null }))
+      const navStore = createStore<NavState>()(() => ({
+        tab: 'home',
+        lastTab: 'home',
+        userHandle: null,
+        authOpen: false,
+      }))
 
       const nav: NavService = {
         openTab(tab) {
-          navStore.setState({ tab, lastTab: tab, userHandle: null })
+          navStore.setState({ tab, lastTab: tab, userHandle: null, authOpen: false })
         },
         openUser(handle) {
-          navStore.setState((s) => ({ ...s, lastTab: s.tab, userHandle: handle }))
+          navStore.setState((s) => ({ ...s, lastTab: s.tab, userHandle: handle, authOpen: false }))
+        },
+        openAuth() {
+          navStore.setState((s) => ({ ...s, authOpen: true }))
+        },
+        closeAuth() {
+          navStore.setState((s) => ({ ...s, authOpen: false }))
         },
         back() {
           navStore.setState((s) => ({ ...s, userHandle: null, tab: s.lastTab }))
@@ -69,7 +87,8 @@ export function routerPlugin(slots: SlotCore<unknown>): CordisPlugin {
           if (!path) return
           const route: Route = parseRoutePath(path)
           if (route.userHandle) nav.openUser(route.userHandle)
-          else nav.openTab(route.tab === 'auth' ? 'settings' : route.tab)
+          else if (route.tab === 'auth') nav.openAuth()
+          else nav.openTab(route.tab)
         },
       }
 
@@ -80,7 +99,7 @@ export function routerPlugin(slots: SlotCore<unknown>): CordisPlugin {
             (cb) => navStore.subscribe(cb),
             () => navStore.getState(),
           )
-          const { tab, userHandle } = state
+          const { tab, userHandle, authOpen } = state
           // hooks 必须在任何条件早返回之前：useMemo 恒调用（覆层时仅构造元素，不渲染）。
           const content = useMemo(() => {
             switch (tab) {
@@ -101,12 +120,22 @@ export function routerPlugin(slots: SlotCore<unknown>): CordisPlugin {
                 return <C />
               }
               case 'settings': {
-                const C = createAuthScreen({ api, onAuthChanged: () => nav.openTab('home') })
+                const C = createSettingsScreen({ api, onOpenAuth: () => nav.openAuth() })
                 return <C />
               }
             }
             // eslint-disable-next-line react-hooks/exhaustive-deps
           }, [tab, userHandle])
+
+          // 认证屏覆层（从设置页进入；保存成功回主页，返回键回设置页）
+          if (authOpen) {
+            const C = createAuthScreen({
+              api,
+              onAuthChanged: () => nav.openTab('home'),
+              onBack: () => nav.closeAuth(),
+            })
+            return <C />
+          }
 
           // 用户主页覆层（全屏，无 tab）
           if (userHandle) {

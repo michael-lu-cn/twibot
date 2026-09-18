@@ -1,7 +1,7 @@
 /**
  * 智能分组屏（对齐 web GroupsView）：组 chips 导航 + 成员列表 + 操作。
  */
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -16,7 +16,8 @@ import type { ApiClient, GroupOption, SmartGroup, SmartGroupMember } from '../li
 import { ERROR_HINTS, isOk } from '../lib/api-client'
 import { initial } from '../lib/format'
 import { MemberActions } from '../components/member-actions'
-import { theme } from '../theme'
+import { spacing as s, type Theme } from '../theme'
+import { useTheme } from '../theme-context'
 
 export interface GroupsScreenProps {
   api: ApiClient
@@ -26,6 +27,8 @@ export interface GroupsScreenProps {
 export function createGroupsScreen(props: GroupsScreenProps) {
   return function GroupsScreen() {
     const { api, onOpenUser } = props
+    const { theme } = useTheme()
+    const styles = useMemo(() => makeStyles(theme), [theme])
     const [groups, setGroups] = useState<SmartGroup[]>([])
     const [options, setOptions] = useState<GroupOption[]>([])
     const [active, setActive] = useState(0)
@@ -164,8 +167,7 @@ export function createGroupsScreen(props: GroupsScreenProps) {
   }
 }
 
-const s = theme.spacing
-const styles = StyleSheet.create({
+const makeStyles = (theme: Theme) => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   header: { paddingHorizontal: s.lg, paddingVertical: s.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
   title: { color: theme.colors.textPrimary, fontSize: theme.fontSize.lg, fontWeight: '800' },

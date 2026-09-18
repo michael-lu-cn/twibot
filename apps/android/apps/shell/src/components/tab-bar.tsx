@@ -1,9 +1,10 @@
 /**
  * 底部导航（Android 版左侧栏）：主页/关注/分组/书签/设置。
  */
-import React from 'react'
+import React, { useMemo } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { theme } from '../theme'
+import type { Theme } from '../theme'
+import { useTheme } from '../theme-context'
 
 export type AppTab = 'home' | 'following' | 'groups' | 'bookmarks' | 'settings'
 
@@ -16,6 +17,8 @@ const TABS: Array<{ key: AppTab; icon: string; label: string }> = [
 ]
 
 export function TabBar({ active, onSelect }: { active: AppTab; onSelect: (t: AppTab) => void }) {
+  const { theme } = useTheme()
+  const styles = useMemo(() => makeStyles(theme), [theme])
   return (
     <View style={styles.bar}>
       {TABS.map((t) => {
@@ -31,7 +34,7 @@ export function TabBar({ active, onSelect }: { active: AppTab; onSelect: (t: App
   )
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: Theme) => StyleSheet.create({
   bar: {
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,

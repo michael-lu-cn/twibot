@@ -2,11 +2,12 @@
  * 推文卡片（RN 版）：语义对齐 web 版 TweetCard。
  * 作者行点击 → 应用内用户主页；右侧外链图标 → X 原网页/原推文。
  */
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Image, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { Tweet } from '../lib/api-client'
 import { displayUrl, fmtAgo, fmtCount, initial, splitLinks } from '../lib/format'
-import { theme } from '../theme'
+import { spacing as s, type Theme } from '../theme'
+import { useTheme } from '../theme-context'
 
 export function TweetCard({
   tweet,
@@ -18,6 +19,8 @@ export function TweetCard({
   /** 图片代理 URL 构造（由上层按宿主 baseUrl 注入）。 */
   imgProxyUrl?: (url: string | undefined | null) => string | undefined
 }) {
+  const { theme } = useTheme()
+  const styles = useMemo(() => makeStyles(theme), [theme])
   const m = tweet.metrics
   const avatarUri = tweet.avatarUrl && imgProxyUrl ? imgProxyUrl(tweet.avatarUrl) : undefined
   const segments = splitLinks(tweet.text, tweet.links)
@@ -107,8 +110,7 @@ export function TweetCard({
   )
 }
 
-const s = theme.spacing
-const styles = StyleSheet.create({
+const makeStyles = (theme: Theme) => StyleSheet.create({
   card: {
     flexDirection: 'row',
     gap: s.md,

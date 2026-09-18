@@ -1,13 +1,14 @@
 /**
  * 用户主页屏（对齐 web UserProfileView）：资料卡 + 该用户推文 + 同步 + 返回。
  */
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, FlatList, Image, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { ApiClient, Tweet, UserProfile } from '../lib/api-client'
 import { ERROR_HINTS, isOk } from '../lib/api-client'
 import { initial } from '../lib/format'
 import { TweetCard } from '../components/tweet-card'
-import { theme } from '../theme'
+import { spacing as s, type Theme } from '../theme'
+import { useTheme } from '../theme-context'
 
 export interface UserScreenProps {
   handle: string
@@ -19,6 +20,8 @@ export interface UserScreenProps {
 export function createUserScreen(props: UserScreenProps) {
   return function UserScreen() {
     const { handle, api, onBack, onOpenUser } = props
+    const { theme } = useTheme()
+    const styles = useMemo(() => makeStyles(theme), [theme])
     const [user, setUser] = useState<UserProfile | null>(null)
     const [tweets, setTweets] = useState<Tweet[]>([])
     const [loaded, setLoaded] = useState(false)
@@ -122,8 +125,7 @@ export function createUserScreen(props: UserScreenProps) {
   }
 }
 
-const s = theme.spacing
-const styles = StyleSheet.create({
+const makeStyles = (theme: Theme) => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   header: {
     flexDirection: 'row',

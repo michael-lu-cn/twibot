@@ -1,10 +1,10 @@
-import { Home, Users, Tags, Bookmark, KeyRound } from "lucide-react"
+import { Home, Users, Tags, Bookmark, Settings } from "lucide-react"
 import type { CredentialStatus } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
-export type TabKey = "home" | "following" | "groups" | "bookmarks" | "auth"
+export type TabKey = "home" | "following" | "groups" | "bookmarks" | "auth" | "settings"
 
-const SOURCE_LABEL: Record<string, string> = {
+export const SOURCE_LABEL: Record<string, string> = {
   env: "环境变量",
   file: "已保存 cookie",
   cdp: "CDP 直连",
@@ -38,7 +38,7 @@ export function Sidebar({
         <NavItem active={active === "following"} icon={<Users className="size-6" />} label="关注" onClick={() => onSelect("following")} />
         <NavItem active={active === "groups"} icon={<Tags className="size-6" />} label="智能分组" onClick={() => onSelect("groups")} />
         <NavItem active={active === "bookmarks"} icon={<Bookmark className="size-6" />} label="书签" onClick={() => onSelect("bookmarks")} />
-        <NavItem active={active === "auth"} icon={<KeyRound className="size-6" />} label="认证设置" onClick={() => onSelect("auth")} />
+        <NavItem active={active === "settings"} icon={<Settings className="size-6" />} label="设置" onClick={() => onSelect("settings")} />
       </nav>
 
       <div className="mt-auto flex items-center gap-3 rounded-full p-3 hover:bg-accent/60">

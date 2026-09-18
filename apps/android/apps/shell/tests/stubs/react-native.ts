@@ -18,6 +18,9 @@ export const Platform = {
     options.node ?? options.default,
 }
 
+/** 主题上下文订阅系统外观；Node 档固定返回深色（组件不渲染，仅满足模块求值）。 */
+export const useColorScheme = (): 'light' | 'dark' => 'dark'
+
 type FakeComponent = (props: Record<string, unknown>) => null
 
 export const ActivityIndicator: FakeComponent = () => null

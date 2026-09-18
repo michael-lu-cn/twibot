@@ -1,12 +1,13 @@
 /**
  * 推荐流屏（对齐 web FeedView）：FlatList + TweetCard + 同步。
  */
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { ApiClient, Tweet } from '../lib/api-client'
 import { ERROR_HINTS, isOk } from '../lib/api-client'
 import { TweetCard } from '../components/tweet-card'
-import { theme } from '../theme'
+import { spacing as s, type Theme } from '../theme'
+import { useTheme } from '../theme-context'
 
 export interface FeedScreenProps {
   api: ApiClient
@@ -16,6 +17,8 @@ export interface FeedScreenProps {
 export function createFeedScreen(props: FeedScreenProps) {
   return function FeedScreen() {
     const { api, onOpenUser } = props
+    const { theme } = useTheme()
+    const styles = useMemo(() => makeStyles(theme), [theme])
     const [tweets, setTweets] = useState<Tweet[]>([])
     const [loaded, setLoaded] = useState(false)
     const [syncing, setSyncing] = useState(false)
@@ -109,42 +112,42 @@ export function createFeedScreen(props: FeedScreenProps) {
   }
 }
 
-const s = theme.spacing
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: s.lg,
-    paddingVertical: s.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.border,
-  },
-  headerText: { flex: 1 },
-  title: { color: theme.colors.textPrimary, fontSize: theme.fontSize.lg, fontWeight: '800' },
-  subtitle: { color: theme.colors.textSecondary, fontSize: theme.fontSize.sm },
-  syncBtn: {
-    backgroundColor: theme.colors.userBubbleBg,
-    borderRadius: 999,
-    paddingHorizontal: s.lg,
-    paddingVertical: s.sm,
-  },
-  btnDisabled: { opacity: 0.5 },
-  syncBtnText: { color: '#fff', fontWeight: '700', fontSize: theme.fontSize.sm },
-  msg: {
-    color: theme.colors.textSecondary,
-    fontSize: theme.fontSize.sm,
-    paddingHorizontal: s.lg,
-    paddingVertical: s.sm,
-    backgroundColor: theme.colors.surface,
-  },
-  empty: { alignItems: 'center', gap: s.sm, padding: s.xl * 2 },
-  emptyTitle: { color: theme.colors.textSecondary, fontSize: theme.fontSize.md },
-  emptyHint: { color: theme.colors.textSecondary, fontSize: theme.fontSize.sm, textAlign: 'center' },
-  skeletonRow: { flexDirection: 'row', gap: s.md, padding: s.lg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
-  skeletonAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.colors.surface },
-  skeletonLines: { flex: 1, gap: s.sm, paddingTop: 4 },
-  skeletonLine: { height: 12, borderRadius: 6, backgroundColor: theme.colors.surface },
-  skeletonLineShort: { height: 12, width: '55%', borderRadius: 6, backgroundColor: theme.colors.surface },
-})
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    root: { flex: 1, backgroundColor: theme.colors.background },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: s.lg,
+      paddingVertical: s.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.border,
+    },
+    headerText: { flex: 1 },
+    title: { color: theme.colors.textPrimary, fontSize: theme.fontSize.lg, fontWeight: '800' },
+    subtitle: { color: theme.colors.textSecondary, fontSize: theme.fontSize.sm },
+    syncBtn: {
+      backgroundColor: theme.colors.userBubbleBg,
+      borderRadius: 999,
+      paddingHorizontal: s.lg,
+      paddingVertical: s.sm,
+    },
+    btnDisabled: { opacity: 0.5 },
+    syncBtnText: { color: '#fff', fontWeight: '700', fontSize: theme.fontSize.sm },
+    msg: {
+      color: theme.colors.textSecondary,
+      fontSize: theme.fontSize.sm,
+      paddingHorizontal: s.lg,
+      paddingVertical: s.sm,
+      backgroundColor: theme.colors.surface,
+    },
+    empty: { alignItems: 'center', gap: s.sm, padding: s.xl * 2 },
+    emptyTitle: { color: theme.colors.textSecondary, fontSize: theme.fontSize.md },
+    emptyHint: { color: theme.colors.textSecondary, fontSize: theme.fontSize.sm, textAlign: 'center' },
+    skeletonRow: { flexDirection: 'row', gap: s.md, padding: s.lg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
+    skeletonAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.colors.surface },
+    skeletonLines: { flex: 1, gap: s.sm, paddingTop: 4 },
+    skeletonLine: { height: 12, borderRadius: 6, backgroundColor: theme.colors.surface },
+    skeletonLineShort: { height: 12, width: '55%', borderRadius: 6, backgroundColor: theme.colors.surface },
+  })

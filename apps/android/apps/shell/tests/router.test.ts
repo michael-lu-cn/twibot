@@ -63,11 +63,24 @@ describe('nav 服务与深链', () => {
     stubFetch({ ok: true, data: { configured: true, keys: ['ct0'], source: 'file' }, source: 'db', elapsedMs: 0 })
     const shell = await boot('http://host')
     await settle()
-    const nav = shell.ctx.nav as { openDeepLink(url: string): void } | undefined
+    const nav = shell.ctx.nav as
+      | {
+          openDeepLink(url: string): void
+          openTab(tab: string): void
+          openAuth(): void
+          closeAuth(): void
+        }
+      | undefined
     expect(nav).toBeTruthy()
+    expect(typeof nav!.openAuth).toBe('function')
+    expect(typeof nav!.closeAuth).toBe('function')
     expect(() => nav!.openDeepLink('twibot://bookmarks')).not.toThrow()
     expect(() => nav!.openDeepLink('twibot://users/foo')).not.toThrow()
+    expect(() => nav!.openDeepLink('twibot://auth')).not.toThrow()
     expect(() => nav!.openDeepLink('https://x.com/home')).not.toThrow()
     expect(() => nav!.openDeepLink('garbage')).not.toThrow()
+    expect(() => nav!.openTab('settings')).not.toThrow()
+    expect(() => nav!.openAuth()).not.toThrow()
+    expect(() => nav!.closeAuth()).not.toThrow()
   })
 })

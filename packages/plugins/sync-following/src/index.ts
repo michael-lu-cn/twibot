@@ -185,7 +185,14 @@ export function apply(ctx: Context, config: Config): void {
     let targetUserId: string | null = null
 
     try {
-      // 拦截 Following GraphQL 响应（页面加载 /following 时自己会请求）
+      // 拦截 Following GraphQL 响应（页面加载 /following 时自己会请求）。
+      //
+      // 顺序铁律：`users` 的顺序 = 落库 position 的顺序 = 列表顺序（见 core-store 的
+      // position 时间轴）。多页滚动时 X 会连发多个响应，若直接 `res.json().then(push)`，
+      // push 顺序取决于「body 读完的先后」而非「响应到达顺序」，页与页之间会被打乱。
+      // 这里立刻发起 body 读取（避免响应体失效），但把「解析 → 入队」串行化到一条链上，
+      // 保证按到达顺序累积；循环每轮 await 该链，进度判断才准确。
+      let captureChain: Promise<void> = Promise.resolve()
       page.on('response', (res) => {
         const u = res.url()
         if (!u.includes('/graphql/') || !u.includes('Following')) return
@@ -199,8 +206,9 @@ export function apply(ctx: Context, config: Config): void {
             if (parsed?.userId) targetUserId = parsed.userId
           }
         } catch {}
-        res
-          .json()
+        const json = res.json()
+        captureChain = captureChain
+          .then(() => json)
           .then((j: any) => {
             const tid = j?.data?.user?.result?.rest_id
             if (tid) targetUserId = tid
@@ -225,6 +233,7 @@ export function apply(ctx: Context, config: Config): void {
       const t0 = Date.now()
       while (users.length === 0 && Date.now() - t0 < 8_000) {
         await page.waitForTimeout(500)
+        await captureChain
         const body = await page.evaluate(() => document.body?.innerText?.slice(0, 600) ?? '').catch(() => '')
         if (session.verify && (await session.verify(page).then((v: { valid: boolean }) => !v.valid).catch(() => false))) {
           throw new ApiError(ErrorCodes.AUTH_FAILED, '登录态失效：cookie 过期或无效，请更新登录凭据', 401)
@@ -239,6 +248,7 @@ export function apply(ctx: Context, config: Config): void {
         const before = users.length
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
         await page.waitForTimeout(SCROLL_WAIT_MS)
+        await captureChain
         if (users.length === before) {
           stallCount++
           if (stallCount >= 2) break
@@ -248,6 +258,7 @@ export function apply(ctx: Context, config: Config): void {
       }
 
       // DOM fallback（GraphQL 拦截失败时）：补漏
+      await captureChain
       if (users.length === 0) {
         const cells = await page.$$('[data-testid="UserCell"]')
         for (const cell of cells) {
