@@ -7,3 +7,12 @@ data/
 .env.*
 !.env.example
 .DS_Store
+
+# 调研/计划/报告等文档只在本地留存，不入库
+docs/
+
+# pnpm 迁移期的 npm 旧树备份（保留以便回退，但不入库）
+node_modules.npm-bak/
+
+# Expo 本地缓存
+.expo/
