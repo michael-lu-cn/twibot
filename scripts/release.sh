@@ -140,4 +140,9 @@ run gh release create "$TAG" "${APK_OUT:-}" --title "twibot $TAG" "${NOTES_ARGS[
 
 say "完成"
 echo "   Release: $(gh repo view --json url -q .url 2>/dev/null || echo '<repo>')/releases/tag/$TAG"
-[[ "${DRY_RUN:-0}" == "1" ]] && echo "   （dry-run：上面所有命令都没有真的执行）"
+# 注意：这里必须用 if 而不是 `[[ ... ]] && echo`——后者在条件为假时会让脚本以 1 退出，
+# 即使发布已经成功（CI 里会被误判为失败）。
+if [[ "${DRY_RUN:-0}" == "1" ]]; then
+  echo "   （dry-run：上面所有命令都没有真的执行）"
+fi
+exit 0
