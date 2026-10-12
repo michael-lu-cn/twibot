@@ -4,7 +4,9 @@
  * - `ThemeProvider` 由壳（App.tsx）注入 mode/setMode，本文件不碰存储（见 theme-store.ts），
  *   这样 Node 档单测导入本模块时不需要 AsyncStorage；
  * - 系统外观经 RN `useColorScheme()` 订阅，mode=system 时随之切换；
- * - 组件统一 `const { theme, mode, setMode } = useTheme()`。
+ * - 组件统一 `const { theme, mode, setMode } = useTheme()`；
+ * - context 本体经 shared.shareModule 登记：远端 chunk 里也会有本文件的一份副本，
+ *   不共用同一个 context 对象的话，chunk 内 `useTheme()` 就看不到壳的 Provider。
  */
 import React, { createContext, useContext, useMemo } from 'react'
 import { useColorScheme } from 'react-native'
@@ -15,6 +17,7 @@ import {
   type ThemeMode,
   type ThemeScheme,
 } from './theme'
+import { shareModule } from './shared'
 
 export interface ThemeApi {
   /** 用户偏好。 */
@@ -26,7 +29,7 @@ export interface ThemeApi {
   setMode(mode: ThemeMode): void
 }
 
-const ThemeContext = createContext<ThemeApi | null>(null)
+const ThemeContext = shareModule('theme-context', () => createContext<ThemeApi | null>(null))
 
 export function ThemeProvider({
   mode,

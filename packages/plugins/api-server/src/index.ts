@@ -26,6 +26,17 @@ const UA =
 export function apply(ctx: Context, config: Config): void {
   const app = new Hono()
 
+  // 开发期请求日志：真机调试时"设备到底发了哪些请求、拿到什么状态"是唯一现场。
+  app.use('*', async (c, next) => {
+    const started = Date.now()
+    await next()
+    const from = (c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined)?.incoming?.socket
+      ?.remoteAddress
+    console.log(
+      `[api] ${c.req.method} ${c.req.path} → ${c.res.status} ${Date.now() - started}ms from=${from ?? '-'} ua=${c.req.header('user-agent') ?? '-'}`,
+    )
+  })
+
   app.get('/api/health', (c) => c.json({ ok: true, uptime: process.uptime() }))
   app.get('/api/hello', (c) =>
     c.json({

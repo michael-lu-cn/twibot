@@ -68,7 +68,10 @@ describe('api-client 请求形态', () => {
   it('GET 路径拼接（去尾部斜杠）', async () => {
     stubFetch(async (url) => new Response(JSON.stringify({ ok: true, data: { tweets: [], syncedAt: null }, source: 'db', elapsedMs: 0 }), { status: 200 }))
     await createApiClient('http://127.0.0.1:12000/').bookmarks(5000)
-    expect(vi.mocked(fetch)).toHaveBeenCalledWith('http://127.0.0.1:12000/api/bookmarks?limit=5000', undefined)
+    const [url, init] = vi.mocked(fetch).mock.calls[0]
+    expect(url).toBe('http://127.0.0.1:12000/api/bookmarks?limit=5000')
+    // 第二参不再是 undefined:带上了超时用的 AbortSignal(网络被冻结时不至于无限等待)。
+    expect(init?.signal).toBeInstanceOf(AbortSignal)
   })
 
   it('POST body 与 content-type', async () => {

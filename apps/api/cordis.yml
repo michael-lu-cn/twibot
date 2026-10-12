@@ -20,7 +20,10 @@
   inject: [credential, api]
   config:
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
-    proxy: http://172.16.74.1:7890
+    # 抓 X 的出网代理（本机 FastLinkC/Clash 监听 *:7890）。
+    # 原先写 172.16.74.1:7890 —— 那是 VM 时代 Mac 上 bridge103 的地址（对 VM 里的
+    # 进程而言"宿主"就是它）；迁移到 Mac 本机后该网卡已不存在，请求会 net::ERR_TIMED_OUT。
+    proxy: http://127.0.0.1:7890
     minIntervalMs: 6000
     maxConcurrent: 3
 
@@ -44,10 +47,29 @@
   name: '@twibot/smart-groups'
   inject: [store, api]
 
+- id: core-topics
+  name: '@twibot/core-topics'
+  inject: [store, api]
+
 - id: api-server
   name: '@twibot/api-server'
   inject: [hello]
   config:
     port: 12000
-    host: 127.0.0.1
-    proxy: http://172.16.74.1:7890
+    # 0.0.0.0 = 局域网可访问（真机手动装 APK 的场景需要）。
+    # ⚠ 本 API 持有 X 登录态且有 /sync 写操作，只在家用/可信 WiFi 下这么开；
+    # 要收敛回「仅本机」就改回 127.0.0.1 并重启。
+    host: 0.0.0.0
+    # 与 core-session 保持同一个出网代理（img-proxy 也走它抓 pbs.twimg.com）。
+    proxy: http://127.0.0.1:7890
+
+# 远端插件 chunk 静态宿主（P2.2 壳热更新通道的服务端半边）。
+# 清单 GET /plugins/manifest.json 每次请求现扫目录 → 重建 chunk 不用重启 API，
+# 壳（apps/android）发现 rev 变了就卸旧装新，不重装 APK。
+- id: chunk-server
+  name: '@twibot/chunk-server'
+  inject: [api]
+  config:
+    # 相对 apps/api 的工作目录；产物由 apps/android/scripts/build-chunk.sh 生成。
+    dir: ../../apps/android/apps/remote-chunk-demo/dist
+    prefix: /plugins

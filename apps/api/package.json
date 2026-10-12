@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "tsx watch src/bin.ts",
     "start": "tsx src/bin.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test ../../packages/plugins/*/src/*.test.ts ../../apps/web/test/*.test.ts"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "workspace:^",
@@ -20,7 +21,9 @@
     "@twibot/core-session": "workspace:^",
     "@twibot/sync-feed": "workspace:^",
     "@twibot/sync-following": "workspace:^",
-    "@twibot/smart-groups": "workspace:^"
+    "@twibot/smart-groups": "workspace:^",
+    "@twibot/core-topics": "workspace:^",
+    "@twibot/chunk-server": "workspace:^"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

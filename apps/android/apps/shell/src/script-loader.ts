@@ -6,6 +6,9 @@
  * - Repack 5.3 已把 ScriptManager 内部化(包导出面不再暴露),原生装载通道
  *   待其重新公开或自建桥接时再启用;届时两条通道仍汇合同一 __face_plugins。
  *
+ * 依赖面:chunk 里的 bare import 由宿主注入面满足(见 chunk-registry 的 ChunkEnv),
+ * 故求值时要一并传入 env;缓存的是"挂载面"(env 无关),装载时仍按次传 env。
+ *
  * 缓存语义("带缓存的客户端"的最小实现):
  * - 内存 Map 以 `${url}@${rev}` 为键;命中即跳过网络(rev 未变不重复下载);
  * - rev 变化 = 新键 = 自然失效重拉;
@@ -13,7 +16,12 @@
  *   即跳过网络;取回成功后异步写回。存储读写故障全部回退网络/仅内存
  *   (服务端是真相源,持久化只省流量;陈旧键由 rev 变更自然废弃,清理属 P3)。
  */
-import { evalChunkCode, getRemoteMount, type RemotePluginMount } from './chunk-registry'
+import {
+  evalChunkCode,
+  getRemoteMount,
+  type ChunkEnv,
+  type RemotePluginMount,
+} from './chunk-registry'
 
 export interface RemoteChunkRef {
   url: string
@@ -82,11 +90,14 @@ async function persistCode(key: string, code: string): Promise<void> {
  * 确保 chunk 已执行并返回其挂载面。
  * @param module - chunk 必须注册的名字(`__face_plugins[module]`)。
  * @param ref - 远端 chunk 的 url 与内容修订。
+ * @param env - 宿主注入面(chunk 里 `require('react')` 等落到它;缺它则只能在
+ *   不 import 任何东西的纯脚本 chunk 上工作)。
  * @throws {Error} 网络失败、HTTP 非 2xx、或求值后未注册 —— 全部大声失败。
  */
 export async function ensureChunkLoaded(
   module: string,
   ref: RemoteChunkRef,
+  env?: ChunkEnv,
 ): Promise<RemotePluginMount> {
   const key = `${ref.url}@${ref.rev}`
   const cached = memoryCache.get(key)
@@ -97,14 +108,14 @@ export async function ensureChunkLoaded(
 
   const stored = await readPersistedCode(key)
   if (stored !== null) {
-    const mounted = evalChunkCode(module, stored)
+    const mounted = evalChunkCode(module, stored, env)
     memoryCache.set(key, mounted)
     return mounted
   }
 
   const urlWithRev = `${ref.url}${ref.url.includes('?') ? '&' : '?'}rev=${encodeURIComponent(ref.rev)}`
   const code = await fetchChunkCode(urlWithRev)
-  const mounted = evalChunkCode(module, code)
+  const mounted = evalChunkCode(module, code, env)
   memoryCache.set(key, mounted)
   void persistCode(key, code)
   return mounted

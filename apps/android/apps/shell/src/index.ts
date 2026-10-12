@@ -8,6 +8,8 @@
  */
 import * as React from 'react'
 import * as ReactNative from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as jsxRuntime from 'react/jsx-runtime'
 
 import { Context } from '@twibot/face-cordis-kernel'
 import { createSlotCore } from '@twibot/face-priority-slot'
@@ -34,6 +36,8 @@ export interface Shell {
   slots: ReturnType<typeof createSlotCore<ChatScreenEntry>>
   /** 插件清单:增删行即实时装卸对应能力。 */
   roster: RosterStore
+  /** 宿主注入面:远端 chunk 求值/装载都要它(plugin-sync 预热 chunk 用)。 */
+  env: ModuleEnv
 }
 
 /**
@@ -81,6 +85,8 @@ export async function boot(
     React,
     ReactNative: ReactNative as unknown,
     roster,
+    AsyncStorage,
+    jsxRuntime,
   }
 
   // ---- 装配器:让 registry 持续等于清单的投影 ----
@@ -95,7 +101,7 @@ export async function boot(
     if (entry.remote === undefined) {
       return resolveModule(entry.module)(env)
     }
-    const mount = await ensureChunkLoaded(entry.module, entry.remote)
+    const mount = await ensureChunkLoaded(entry.module, entry.remote, env)
     const made = mount.mount(env as unknown as Record<string, unknown>) as CordisPlugin
     if (typeof made?.apply !== 'function') {
       throw new Error(`remote-chunk: "${entry.module}".mount() did not return a cordis plugin shape`)
@@ -130,5 +136,5 @@ export async function boot(
   })
   await queue
 
-  return { ctx, slots, roster }
+  return { ctx, slots, roster, env }
 }

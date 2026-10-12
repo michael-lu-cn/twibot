@@ -20,11 +20,15 @@ import type { RosterStore } from './roster'
 /** 工厂运行环境:宿主装配产物,非注入服务。 */
 export interface ModuleEnv {
   slots: SlotCore<unknown>
-  /** 注入给远端 chunk 的渲染原语(chunk 不经打包器,拿不到 import)。 */
+  /** 注入给远端 chunk 的渲染原语(chunk 的 `require('react')` 落到它)。 */
   React: unknown
   ReactNative: unknown
   /** 插件清单:plugin-updater 等装配类插件经它读写远端行。 */
   roster: RosterStore
+  /** 原生存储(RN 侧 AsyncStorage);远端 chunk 里 bare import 时经 require 面注入。 */
+  AsyncStorage?: unknown
+  /** react/jsx-runtime(自动 JSX 转换);同样经 require 面注入。 */
+  jsxRuntime?: unknown
 }
 
 export type PluginFactory = (env: ModuleEnv) => CordisPlugin
@@ -37,6 +41,12 @@ const MODULE_TABLE: Record<string, PluginFactory> = {
   'ui-router': (env) => routerPlugin(env.slots),
   'ui-frame': (env) => framePlugin(env),
 }
+
+/**
+ * 本地模块表键集:宿主清单只允许把这几类插件远端化(清单是数据,但"能装哪些
+ * 能力"仍是壳的信任边界;名单外的行一律忽略,见 plugin-sync)。
+ */
+export const MODULE_KEYS: readonly string[] = Object.keys(MODULE_TABLE)
 
 /**
  * 按键取插件工厂;未知键立即抛错(误配大声失败,绝不静默跳过)。

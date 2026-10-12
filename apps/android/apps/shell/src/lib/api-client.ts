@@ -109,9 +109,27 @@ export interface BatchTask {
 export function createApiClient(baseUrl: string) {
   const base = baseUrl.replace(/\/+$/, '')
 
-  async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
+  /** 单请求默认超时：真机上网络被冻结/隧道断掉时，宁可报错也不要无限等待。 */
+  const REQUEST_TIMEOUT_MS = 8000
+  /**
+   * 同步类请求的超时：这类接口要真的拉起 X 页面翻页抓取（书签默认 30 轮滚动，
+   * 每轮 1.2s，加上建会话与首屏等待），耗时以分钟计。用默认 8s 会在服务端
+   * 还在抓的时候就把连接掐了 —— 界面报"连不上后端"，而服务端其实还在写库。
+   */
+  const SYNC_TIMEOUT_MS = 180_000
+
+  async function request<T>(
+    path: string,
+    init?: RequestInit,
+    opts?: { timeoutMs?: number },
+  ): Promise<ApiResult<T>> {
+    // 没有超时的 fetch 会让"请求挂住"变成永远空白的界面（诊断屏也不显示原因）；
+    // 拿不到响应就按网络错误返回，调用方至少能落到可解释的状态。
+    const timeoutMs = opts?.timeoutMs ?? REQUEST_TIMEOUT_MS
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
     try {
-      const res = await fetch(`${base}${path}`, init)
+      const res = await fetch(`${base}${path}`, { ...init, signal: controller.signal })
       const body = (await res.json().catch(() => null)) as ApiResult<T> | null
       if (!body) {
         return { ok: false, error: { code: 'NETWORK', message: `后端返回异常（HTTP ${res.status}）` } }
@@ -119,6 +137,8 @@ export function createApiClient(baseUrl: string) {
       return body
     } catch {
       return { ok: false, error: { code: 'NETWORK', message: '无法连接后端（检查地址与网络）' } }
+    } finally {
+      clearTimeout(timer)
     }
   }
 
@@ -137,12 +157,20 @@ export function createApiClient(baseUrl: string) {
 
     feed: (limit = 50) => request<{ tweets: Tweet[]; syncedAt: number | null }>(`/api/feed?limit=${limit}`),
     syncFeed: (limit = 50) =>
-      request<{ added: number; tweets: Tweet[]; syncedAt: number }>(`/api/feed/sync?limit=${limit}`, { method: 'POST' }),
+      request<{ added: number; tweets: Tweet[]; syncedAt: number }>(
+        `/api/feed/sync?limit=${limit}`,
+        { method: 'POST' },
+        { timeoutMs: SYNC_TIMEOUT_MS },
+      ),
 
     bookmarks: (limit = 5000) =>
       request<{ tweets: Tweet[]; syncedAt: number | null }>(`/api/bookmarks?limit=${limit}`),
     syncBookmarks: (limit = 2000) =>
-      request<{ added: number; tweets: Tweet[]; syncedAt: number }>(`/api/bookmarks/sync?limit=${limit}`, { method: 'POST' }),
+      request<{ added: number; tweets: Tweet[]; syncedAt: number }>(
+        `/api/bookmarks/sync?limit=${limit}`,
+        { method: 'POST' },
+        { timeoutMs: SYNC_TIMEOUT_MS },
+      ),
 
     following: (limit = 200) =>
       request<{ handle: string; users: FollowingUser[]; syncedAt: number | null }>(`/api/following?limit=${limit}`),
@@ -150,14 +178,17 @@ export function createApiClient(baseUrl: string) {
       request<{ handle: string; users: FollowingUser[]; added: number; syncedAt: number }>(
         `/api/following/sync?limit=${limit}`,
         { method: 'POST' },
+        { timeoutMs: SYNC_TIMEOUT_MS },
       ),
 
     userProfile: (handle: string) =>
       request<{ user: UserProfile | null; tweets: Tweet[] }>(`/api/users/${handle}`),
     syncUserTweets: (handle: string, limit = 50) =>
-      request<{ added: number; tweets: Tweet[]; syncedAt: number }>(`/api/users/${handle}/tweets/sync?limit=${limit}`, {
-        method: 'POST',
-      }),
+      request<{ added: number; tweets: Tweet[]; syncedAt: number }>(
+        `/api/users/${handle}/tweets/sync?limit=${limit}`,
+        { method: 'POST' },
+        { timeoutMs: SYNC_TIMEOUT_MS },
+      ),
     unfollow: (handle: string) =>
       request<{ unfollowed: boolean; handle: string }>(`/api/users/${handle}/unfollow`, { method: 'POST' }),
 
