@@ -331,6 +331,29 @@ pnpm --filter @twibot/web build       # 前端类型检查 + 产物（apps/web/d
 > `apps/api` 没有自己的 `tsconfig.json`，其 `typecheck` 脚本在干净检出上不成立（历史遗留）；
 > 服务端以 `test` 为准。
 
+## 发布
+
+打一个带 APK 的 GitHub Release，一条命令：
+
+```bash
+scripts/release.sh 0.1.0                       # 质量门 → 推送 → 构建 APK → 打 tag → 建 Release
+scripts/release.sh 0.1.0 --commit "feat: ..."  # 顺手把工作区改动提交掉
+scripts/release.sh 0.1.0 --draft --prerelease  # 草稿 / 预发布
+DRY_RUN=1 scripts/release.sh 0.1.0             # 只打印将执行的命令，不动任何东西
+```
+
+它按顺序做：`pnpm install --frozen-lockfile` → api / face-shell 单测 + 壳 typecheck + web build →
+推送当前分支 → `gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a` →
+APK 复制到 `dist/release/twibot-face-vX.Y.Z.apk` → `git tag vX.Y.Z` 并推送 →
+`gh release create … --generate-notes` 把 APK 作为 Release 资产上传。
+`SKIP_TESTS=1` / `SKIP_BUILD=1` / `SKIP_PUSH=1` 可跳过对应步骤。
+
+前置：[gh](https://cli.github.com) 登录过一次即可（`gh auth login`，token 需要 `repo` scope；
+若要推送 `.github/workflows/` 里的文件再加 `workflow`）。
+
+> 当前 APK 用 Android **debug 签名**（`CN=Android Debug`），侧载没问题；正式分发前请在
+> `apps/android/apps/shell/android` 配 release keystore。
+
 ## 常见问题
 
 **抓取全部失败 / `page.goto: net::ERR_TIMED_OUT`** —— 代理没配或配错。`core-session` 与 `api-server`
