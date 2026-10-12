@@ -5,6 +5,7 @@ import { Sidebar, type TabKey } from "@/components/Sidebar"
 import { FeedView } from "@/components/FeedView"
 import { FollowingView } from "@/components/FollowingView"
 import { GroupsView } from "@/components/GroupsView"
+import { TopicsView } from "@/components/TopicsView"
 import { BookmarksView } from "@/components/BookmarksView"
 import { UserProfileView } from "@/components/UserProfileView"
 import { CookieSetup } from "@/components/CookieSetup"
@@ -47,7 +48,7 @@ export default function App() {
     applyRoute(handle ? { tab: lastTabRef.current, userHandle: handle } : { tab: lastTabRef.current })
   }
 
-  const { tab, userHandle } = route
+  const { tab, userHandle, topicId } = route
   const showSetup = tab === "auth" || (tab === "home" && status !== null && !status.configured)
 
   let main: React.ReactNode
@@ -59,6 +60,8 @@ export default function App() {
     main = <FollowingView onOpenUser={goUser} />
   } else if (tab === "groups") {
     main = <GroupsView onOpenUser={goUser} />
+  } else if (tab === "topics") {
+    main = <TopicsView topicId={topicId} />
   } else if (tab === "bookmarks") {
     main = <BookmarksView onOpenUser={goUser} />
   } else if (tab === "settings") {

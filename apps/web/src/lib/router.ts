@@ -5,6 +5,8 @@ export interface Route {
   tab: TabKey
   /** 用户主页 handle（渲染时优先级最高，占据主列）。 */
   userHandle?: string
+  /** 话题标签页里选中/深链的话题 id（`#/topics/:id`）。 */
+  topicId?: string
 }
 
 /** 从 location.hash 解析路由；未知/空路径回退到主页。 */
@@ -18,6 +20,10 @@ export function parseHash(hash = window.location.hash): Route {
     case "auth":
     case "settings":
       return { tab: seg }
+    case "topics": {
+      const topicId = rest[0] ? decodeURIComponent(rest[0]) : undefined
+      return { tab: "topics", topicId }
+    }
     case "users": {
       const handle = rest[0] ? decodeURIComponent(rest[0]) : undefined
       return { tab: "home", userHandle: handle }
@@ -27,9 +33,10 @@ export function parseHash(hash = window.location.hash): Route {
   }
 }
 
-/** 路由 → hash（如 "#/bookmarks"、"/#/users/foo"）。 */
+/** 路由 → hash（如 "#/bookmarks"、"/#/users/foo"、"/#/topics/t_xxx"）。 */
 export function routeHash(r: Route): string {
   if (r.userHandle) return `#/users/${encodeURIComponent(r.userHandle)}`
+  if (r.tab === "topics" && r.topicId) return `#/topics/${encodeURIComponent(r.topicId)}`
   return `#/${r.tab}`
 }
 

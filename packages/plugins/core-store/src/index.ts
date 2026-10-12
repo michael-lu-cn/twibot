@@ -1,5 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import Database from 'better-sqlite3'
+import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
@@ -205,6 +206,37 @@ export interface StoreService {
   listBookmarks(limit: number): FeedItemRow[]
   /** 书签最后同步时间。 */
   getBookmarksSyncedAt(): number | null
+
+  // ── 话题 DAG ──
+  /** 新建话题（id 服务端生成 t_<rand>），返回完整行。 */
+  createTopic(input: { name: string; description?: string; color?: string }): TopicRow
+  /** 按 id 取话题，无则 null。 */
+  getTopic(id: string): TopicRow | null
+  /** 局部更新话题（未提供的字段保持原值）；话题不存在返回 null。 */
+  updateTopic(id: string, patch: { name?: string; description?: string; color?: string }): TopicRow | null
+  /** 删除话题：同一事务先删其全部入/出边再删节点；不递归删子孙。 */
+  deleteTopic(id: string): boolean
+  /** 全部话题（name 不区分大小写升序）。 */
+  listTopics(): TopicRow[]
+  /** 全部边（全量图读取用）。 */
+  listTopicEdges(): TopicEdge[]
+  /** 直接父话题（name 升序）。 */
+  getTopicParents(childId: string): TopicRow[]
+  /** 直接子话题（name 升序）。 */
+  getTopicChildren(parentId: string): TopicRow[]
+  /** 无父话题（含孤立节点，name 升序）。 */
+  getTopicRoots(): TopicRow[]
+  /** 某话题的全部后代 id（递归 CTE，不含自身）；环校验基准。 */
+  getTopicDescendantIds(rootId: string): string[]
+  /** 给子话题 childId 增加父话题 parentId。 */
+  addTopicParent(childId: string, parentId: string): TopicEdgeResult
+  /** 原子替换子话题的父集合（先整体校验，再删旧插新）。 */
+  setTopicParents(childId: string, parentIds: string[]): 'ok' | 'cycle' | 'missing'
+  /** 移除一条父边，返回是否命中。 */
+  removeTopicParent(childId: string, parentId: string): boolean
+  /** 全图环自检（纯 SQL，O(V+E)），供启动告警/运维端点。 */
+  hasTopicCycle(): boolean
+
   /** 键值读写（登录账号 handle 持久化等）。 */
   kvGet(key: string): string | null
   kvSet(key: string, value: string): void
@@ -217,6 +249,55 @@ export interface FollowingUserRow {
   bio: string
   avatarUrl: string
 }
+
+// ─── 话题（Topic）DAG ─────────────────────────────────────────────────────
+//
+// 话题构成一张有向无环图（DAG）：一个话题可有多个父、多个子。
+// 边方向 parent_id → child_id，语义「parent 是 child 的上级话题」；
+// 关系由子话题持有（写入口是「给子话题加/设父」）。
+//
+// 唯一硬约束是无环：所有写边都先做后代检测——新增父 P 到子 C 时，
+// 若 P ∈ 后代(C)（存在路径 C →* P）则会成环，拒绝。自环（P === C）单独拒绝。
+// 删除节点只删该点及其全部边，**不递归删子孙**（子孙可能另有父）。
+
+export interface TopicRow {
+  id: string
+  name: string
+  description: string
+  color: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface TopicEdge {
+  parentId: string
+  childId: string
+}
+
+/** 写边结果：路由层据此映射 HTTP 状态码。 */
+export type TopicEdgeResult = 'ok' | 'cycle' | 'self' | 'missing' | 'duplicate'
+
+interface TopicDbRow {
+  id: string
+  name: string
+  description: string
+  color: string
+  created_at: number
+  updated_at: number
+}
+
+function toTopicRow(r: TopicDbRow): TopicRow {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    color: r.color,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+const TOPIC_SELECT = 'SELECT id, name, description, color, created_at, updated_at FROM topics'
 
 export const name = 'core-store'
 
@@ -285,6 +366,25 @@ export function apply(ctx: Context, config: Config): void {
         tweet_id TEXT PRIMARY KEY,
         fetched_at INTEGER NOT NULL
       );
+      -- 话题 DAG：节点 + 父→子边。边唯一由复合主键保证；不依赖外键级联
+      -- （本库未开 PRAGMA foreign_keys，删除在事务内显式清边）。
+      CREATE TABLE IF NOT EXISTS topics (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        color TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS topic_edges (
+        parent_id TEXT NOT NULL,
+        child_id TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (parent_id, child_id)
+      );
+      -- 沿子查父（inspector / 环校验）与沿父查子（Finder 列）各一个索引
+      CREATE INDEX IF NOT EXISTS topic_edges_child_idx ON topic_edges(child_id);
+      CREATE INDEX IF NOT EXISTS topic_edges_parent_idx ON topic_edges(parent_id);
     `)
   }
 
@@ -583,6 +683,174 @@ export function apply(ctx: Context, config: Config): void {
           ? { id: String(r.user_id), handle: String(r.handle), name: String(r.name ?? ''), avatarUrl: String(r.avatar_url ?? '') }
           : null,
       }))
+    },
+
+    // ── 话题 DAG ──────────────────────────────────────────────────────
+
+    createTopic(input) {
+      const id = `t_${randomUUID().replace(/-/g, '').slice(0, 12)}`
+      const now = Date.now()
+      const name = input.name.trim()
+      const description = input.description ?? ''
+      const color = input.color ?? ''
+      sqlite
+        .prepare('INSERT INTO topics (id, name, description, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(id, name, description, color, now, now)
+      return { id, name, description, color, createdAt: now, updatedAt: now }
+    },
+
+    getTopic(id) {
+      const row = sqlite.prepare(`${TOPIC_SELECT} WHERE id = ?`).get(id) as TopicDbRow | undefined
+      return row ? toTopicRow(row) : null
+    },
+
+    updateTopic(id, patch) {
+      const cur = this.getTopic(id)
+      if (!cur) return null
+      const name = patch.name !== undefined ? patch.name.trim() : cur.name
+      const description = patch.description !== undefined ? patch.description : cur.description
+      const color = patch.color !== undefined ? patch.color : cur.color
+      sqlite
+        .prepare('UPDATE topics SET name = ?, description = ?, color = ?, updated_at = ? WHERE id = ?')
+        .run(name, description, color, Date.now(), id)
+      return this.getTopic(id)
+    },
+
+    deleteTopic(id) {
+      // 同一事务：先清该点全部入/出边，再删节点。子孙保留（可能另有父）。
+      const tx = sqlite.transaction(() => {
+        sqlite.prepare('DELETE FROM topic_edges WHERE parent_id = ? OR child_id = ?').run(id, id)
+        return sqlite.prepare('DELETE FROM topics WHERE id = ?').run(id).changes > 0
+      })
+      return tx()
+    },
+
+    listTopics() {
+      const rows = sqlite
+        .prepare(`${TOPIC_SELECT} ORDER BY name COLLATE NOCASE ASC, id ASC`)
+        .all() as TopicDbRow[]
+      return rows.map(toTopicRow)
+    },
+
+    listTopicEdges() {
+      const rows = sqlite.prepare('SELECT parent_id, child_id FROM topic_edges').all() as Array<{
+        parent_id: string
+        child_id: string
+      }>
+      return rows.map((r) => ({ parentId: r.parent_id, childId: r.child_id }))
+    },
+
+    getTopicParents(childId) {
+      const rows = sqlite
+        .prepare(
+          `SELECT t.id, t.name, t.description, t.color, t.created_at, t.updated_at
+           FROM topic_edges e JOIN topics t ON t.id = e.parent_id
+           WHERE e.child_id = ?
+           ORDER BY t.name COLLATE NOCASE ASC, t.id ASC`,
+        )
+        .all(childId) as TopicDbRow[]
+      return rows.map(toTopicRow)
+    },
+
+    getTopicChildren(parentId) {
+      const rows = sqlite
+        .prepare(
+          `SELECT t.id, t.name, t.description, t.color, t.created_at, t.updated_at
+           FROM topic_edges e JOIN topics t ON t.id = e.child_id
+           WHERE e.parent_id = ?
+           ORDER BY t.name COLLATE NOCASE ASC, t.id ASC`,
+        )
+        .all(parentId) as TopicDbRow[]
+      return rows.map(toTopicRow)
+    },
+
+    getTopicRoots() {
+      const rows = sqlite
+        .prepare(
+          `${TOPIC_SELECT}
+           WHERE id NOT IN (SELECT child_id FROM topic_edges)
+           ORDER BY name COLLATE NOCASE ASC, id ASC`,
+        )
+        .all() as TopicDbRow[]
+      return rows.map(toTopicRow)
+    },
+
+    getTopicDescendantIds(rootId) {
+      // 递归 CTE 沿父→子展开；UNION（非 ALL）去重，脏数据已有环也不会无限递归。
+      const rows = sqlite
+        .prepare(
+          `WITH RECURSIVE desc(id) AS (
+             SELECT child_id FROM topic_edges WHERE parent_id = ?
+             UNION
+             SELECT e.child_id FROM topic_edges e JOIN desc d ON e.parent_id = d.id
+           )
+           SELECT id FROM desc`,
+        )
+        .all(rootId) as Array<{ id: string }>
+      return rows.map((r) => r.id)
+    },
+
+    addTopicParent(childId, parentId) {
+      const tx = sqlite.transaction((): TopicEdgeResult => {
+        if (!this.getTopic(childId) || !this.getTopic(parentId)) return 'missing'
+        if (childId === parentId) return 'self'
+        const dup = sqlite
+          .prepare('SELECT 1 FROM topic_edges WHERE parent_id = ? AND child_id = ?')
+          .get(parentId, childId)
+        if (dup) return 'duplicate'
+        // 成环当且仅当新父是子的后代（存在路径 子 →* 父）
+        if (this.getTopicDescendantIds(childId).includes(parentId)) return 'cycle'
+        sqlite
+          .prepare('INSERT INTO topic_edges (parent_id, child_id, created_at) VALUES (?, ?, ?)')
+          .run(parentId, childId, Date.now())
+        return 'ok'
+      })
+      return tx()
+    },
+
+    setTopicParents(childId, parentIds) {
+      if (!this.getTopic(childId)) return 'missing'
+      const unique = [...new Set(parentIds)]
+      for (const p of unique) {
+        if (p === childId) return 'cycle' // 自环
+        if (!this.getTopic(p)) return 'missing'
+      }
+      // 一次性算后代集合；任一候选命中即整批拒绝（零写入）
+      const desc = new Set(this.getTopicDescendantIds(childId))
+      for (const p of unique) if (desc.has(p)) return 'cycle'
+      const tx = sqlite.transaction(() => {
+        sqlite.prepare('DELETE FROM topic_edges WHERE child_id = ?').run(childId)
+        const insert = sqlite.prepare(
+          'INSERT OR IGNORE INTO topic_edges (parent_id, child_id, created_at) VALUES (?, ?, ?)',
+        )
+        const now = Date.now()
+        for (const p of unique) insert.run(p, childId, now)
+      })
+      tx()
+      return 'ok'
+    },
+
+    removeTopicParent(childId, parentId) {
+      return (
+        sqlite.prepare('DELETE FROM topic_edges WHERE parent_id = ? AND child_id = ?').run(parentId, childId)
+          .changes > 0
+      )
+    },
+
+    hasTopicCycle() {
+      // 对每条边 (start=A, cur=B) 沿父→子向下走；若能走回 start，即存在环 A →* A。
+      // UNION（非 ALL）去重，脏数据已成环也不会无限递归。
+      const row = sqlite
+        .prepare(
+          `WITH RECURSIVE walk(start, cur) AS (
+             SELECT parent_id, child_id FROM topic_edges
+             UNION
+             SELECT w.start, e.child_id FROM topic_edges e JOIN walk w ON e.parent_id = w.cur
+           )
+           SELECT start FROM walk WHERE cur = start LIMIT 1`,
+        )
+        .get()
+      return !!row
     },
 
     kvGet(key) {
